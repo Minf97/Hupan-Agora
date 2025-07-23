@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { agents } from "@/db/schema/agents";
-import { eq } from "drizzle-orm";
 
 // 获取所有agents
 export async function GET() {
   try {
     const allAgents = await db.select().from(agents);
+    console.log(allAgents, 'allAgents');
     return NextResponse.json(allAgents);
   } catch (error) {
     console.error("获取agents失败:", error);

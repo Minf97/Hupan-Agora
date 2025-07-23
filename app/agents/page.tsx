@@ -24,6 +24,9 @@ export default function AgentsPage() {
       try {
         setLoading(true);
         const response = await fetch("/api/agents");
+
+        console.log(response, 'response');
+        
         
         if (!response.ok) {
           throw new Error("无法获取数字人数据");
