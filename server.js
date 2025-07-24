@@ -45,38 +45,78 @@ const io = new SocketIOServer(server, {
 
 console.log('Socket.IO服务器已初始化，等待连接...');
 
-// 存储agent状态
-let agentStates = [
-  { id: 1, name: '张三', x: 5, y: 5, color: '#FF5733', status: 'idle' },
-  { id: 2, name: '李四', x: 15, y: 10, color: '#33A1FF', status: 'idle' },
-  { id: 3, name: '王五', x: 8, y: 18, color: '#33FF57', status: 'idle' },
-];
+// 导入数据库服务
+const { getAllAgents, updateAgentState } = require('./db/services/agents-cjs');
+
+// 存储agent状态（从数据库加载）
+let agentStates = [];
 
 let townTime = { hour: 8, minute: 0 };
 
+// 从数据库加载agents
+async function loadAgentsFromDatabase() {
+  try {
+    console.log('从数据库加载agents...');
+    agentStates = await getAllAgents();
+    console.log(`已加载 ${agentStates.length} 个agents:`, agentStates.map(a => a.name).join(', '));
+  } catch (error) {
+    console.error('加载agents失败:', error);
+    // 如果数据库加载失败，使用默认数据
+    agentStates = [
+      { id: 1, name: '张三', x: 5, y: 5, color: '#FF5733', status: 'idle' },
+      { id: 2, name: '李四', x: 15, y: 10, color: '#33A1FF', status: 'idle' },
+      { id: 3, name: '王五', x: 8, y: 18, color: '#33FF57', status: 'idle' },
+    ];
+    console.log('使用默认agents数据');
+  }
+}
+
+// 启动时加载agents
+loadAgentsFromDatabase();
+
 // 监听连接
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
   console.log('客户端已连接:', socket.id);
   console.log('客户端传输方式:', socket.conn.transport.name);
 
+  // 确保agents已加载，如果没有则重新加载
+  if (agentStates.length === 0) {
+    await loadAgentsFromDatabase();
+  }
+
   // 发送初始状态
   console.log('发送初始数据到客户端:', socket.id);
-  // TODO: 这里 agentStates 要从数据库拿
   socket.emit('init', { agents: agentStates, townTime });
 
   // 监听任务完成上报
-  socket.on('task_complete', (data) => {
+  socket.on('task_complete', async (data) => {
     console.log('收到任务完成上报:', data);
 
-    // 更新agent状态
+    // 更新内存中的agent状态
     const agentIndex = agentStates.findIndex(a => a.id === data.agentId);
     if (agentIndex !== -1) {
-      agentStates[agentIndex] = {
-        ...agentStates[agentIndex],
+      const updates = {
         status: data.status,
         x: data.position?.x || agentStates[agentIndex].x,
         y: data.position?.y || agentStates[agentIndex].y
       };
+
+      agentStates[agentIndex] = {
+        ...agentStates[agentIndex],
+        ...updates
+      };
+
+      // 同步更新到数据库
+      try {
+        await updateAgentState(data.agentId, {
+          x: updates.x,
+          y: updates.y,
+          status: updates.status
+        });
+        console.log(`Agent ${data.agentId} 状态已同步到数据库`);
+      } catch (error) {
+        console.error(`同步Agent ${data.agentId} 状态到数据库失败:`, error);
+      }
     }
 
     // 如果agent变为空闲状态，可以分配新任务
@@ -212,7 +252,7 @@ setInterval(() => {
       }
     });
 
-    // TODO: 这里要上传到后端，同步数据库
+    // Agent状态更新已在task_complete中同步到数据库
   }
 }, 3000);
 

@@ -1,5 +1,5 @@
 {
-  "id": "6dfb7dca-718c-47cc-9129-47a009ee9654",
+  "id": "cbe8348d-6165-4f02-98e3-ba569cc41328",
   "prevId": "bef73e23-0181-498d-a62e-a99a6d7ae08a",
   "version": "7",
   "dialect": "postgresql",
@@ -54,28 +54,28 @@
           "name": "x",
           "type": "numeric(10, 2)",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "'5'"
         },
         "y": {
           "name": "y",
           "type": "numeric(10, 2)",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "'5'"
         },
         "color": {
           "name": "color",
           "type": "varchar(7)",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "'#FF5733'"
         },
         "status": {
           "name": "status",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "default": "'idle'"
         },
         "created_at": {
