@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Users, MessageSquareText } from 'lucide-react';
+import TownMapWrapper from '@/components/TownMapWrapper';
 
 export default function Home() {
   return (
@@ -11,6 +12,15 @@ export default function Home() {
           一个 multi-agent 数字人小镇，数字人拥有记忆、反思和交流能力
         </p>
       </header>
+
+      {/* 添加地图组件 */}
+      <div className="mb-12">
+        <h2 className="text-2xl font-semibold mb-4">小镇实况</h2>
+        <p className="text-muted-foreground mb-6">
+          观察数字人在小镇中的活动。他们会自主移动、交流，并根据时间进行不同活动。
+        </p>
+        <TownMapWrapper />
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="bg-card rounded-lg p-6 shadow-sm">
