@@ -1,49 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Plus, Loader2 } from "lucide-react";
-
-interface Agent {
-  id: number;
-  name: string;
-  description: string;
-  personality: string;
-  avatarUrl?: string;
-}
+import { useAgentStore } from "@/store/agents";
+import { Agent } from "@/db/schema/agents";
 
 export default function AgentsPage() {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { agents, loading, error, fetchAgents } = useAgentStore();
 
-  // 加载数字人列表
   useEffect(() => {
-    const fetchAgents = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch("/api/agents");
-
-        console.log(response, 'response');
-        
-        
-        if (!response.ok) {
-          throw new Error("无法获取数字人数据");
-        }
-        
-        const data = await response.json();
-        setAgents(data);
-      } catch (error) {
-        console.error("获取数字人失败:", error);
-        setError("无法加载数字人。请稍后再试。");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchAgents();
-  }, []);
+  }, [fetchAgents]);
 
   return (
     <div className="container mx-auto px-4 py-8">

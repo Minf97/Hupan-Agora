@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAgentStore } from "@/store/agents";
 import Link from "next/link";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -37,7 +38,7 @@ type AgentFormValues = z.infer<typeof agentFormSchema>;
 
 export default function NewAgentPage() {
   const router = useRouter();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { addAgent, loading } = useAgentStore();
   const [error, setError] = useState("");
 
   // 默认值
@@ -57,30 +58,16 @@ export default function NewAgentPage() {
 
   async function onSubmit(data: AgentFormValues) {
     try {
-      setIsSubmitting(true);
       setError("");
-
-      const response = await fetch("/api/agents", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "创建数字人失败");
+      const newAgent = await addAgent(data);
+      
+      if (newAgent) {
+        router.push(`/agents/${newAgent.id}`);
+        router.refresh();
       }
-
-      const newAgent = await response.json();
-      router.push(`/agents/${newAgent.id}`);
-      router.refresh();
     } catch (err) {
       console.error("创建数字人时出错:", err);
       setError(err instanceof Error ? err.message : "创建数字人时出现未知错误");
-    } finally {
-      setIsSubmitting(false);
     }
   }
 
@@ -205,8 +192,8 @@ export default function NewAgentPage() {
               <Button variant="outline" asChild>
                 <Link href="/agents">取消</Link>
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Button type="submit" disabled={loading}>
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 创建数字人
               </Button>
             </div>

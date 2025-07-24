@@ -2,39 +2,10 @@
 
 import { useEffect, useState, useRef } from "react";
 import { Stage, Layer, Rect, Circle, Text, Group } from "react-konva";
+import { Socket, io } from "socket.io-client";
+import Konva from "konva";
 import PF from "pathfinding";
-
-// 地图配置
-const MAP_CONFIG = {
-  width: 800,
-  height: 500,
-  gridSize: 20,
-  obstacles: [
-    { x: 100, y: 100, width: 100, height: 80 },  // 建筑物
-    { x: 300, y: 200, width: 120, height: 70 },  // 建筑物
-    { x: 500, y: 150, width: 80, height: 100 },  // 建筑物
-    { x: 200, y: 350, width: 150, height: 60 }   // 建筑物
-  ]
-};
-
-// 定义Agent类型
-interface Agent {
-  id: number;
-  name: string;
-  x: number;
-  y: number;
-  color: string;
-  target: { x: number; y: number };
-  path?: { x: number; y: number }[];
-  pathIndex?: number;
-}
-
-// 模拟数字人
-const INITIAL_AGENTS: Agent[] = [
-  { id: 1, name: "张三", x: 50, y: 50, color: "#e74c3c", target: { x: 600, y: 400 } },
-  { id: 2, name: "李四", x: 700, y: 50, color: "#3498db", target: { x: 150, y: 350 } },
-  { id: 3, name: "王五", x: 400, y: 400, color: "#2ecc71", target: { x: 700, y: 300 } }
-];
+import { MAP_CONFIG, Agent } from "@/lib/map-config";
 
 // 将坐标转换为网格坐标
 const toGridCoords = (x: number, y: number) => ({
@@ -43,10 +14,17 @@ const toGridCoords = (x: number, y: number) => ({
 });
 
 export default function TownMap() {
-  const [agents, setAgents] = useState<Agent[]>(INITIAL_AGENTS);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [townTime, setTownTime] = useState({ hour: 8, minute: 0 });
   const [realTimeSeconds, setRealTimeSeconds] = useState(0);
-  const stageRef = useRef(null);
+  const [connectionStatus, setConnectionStatus] = useState("正在连接...");
+  const stageRef = useRef<Konva.Stage | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const animationsRef = useRef<{ [key: number]: Konva.Animation }>({});
+  
+  // 引用每个agent的circle节点，用于动画
+  const agentCirclesRef = useRef<{ [key: number]: Konva.Circle }>({});
+  const agentTextsRef = useRef<{ [key: number]: Konva.Text }>({});
   
   // 创建寻路网格
   const gridRef = useRef(createGrid());
@@ -76,117 +54,134 @@ export default function TownMap() {
     return grid;
   }
   
-  // 寻找路径
-  function findPath(startX: number, startY: number, endX: number, endY: number) {
-    const { gridX: sX, gridY: sY } = toGridCoords(startX, startY);
-    const { gridX: eX, gridY: eY } = toGridCoords(endX, endY);
+  // 连接WebSocket
+  useEffect(() => {
+    // 获取WebSocket服务器地址
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:4000';
     
-    // 克隆网格以避免修改原始网格
-    const gridClone = gridRef.current.clone();
-    const finder = new PF.AStarFinder({
-      allowDiagonal: true,
-      dontCrossCorners: true
+    console.log("正在连接到WebSocket:", wsUrl);
+    
+    // 创建WebSocket连接
+    const socket = io(wsUrl, {
+      transports: ['websocket', 'polling'], // 优先使用WebSocket，备选轮询
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 20000
     });
     
-    try {
-      const path = finder.findPath(sX, sY, eX, eY, gridClone);
-      return path.map((point: number[]) => ({
-        x: point[0] * MAP_CONFIG.gridSize + MAP_CONFIG.gridSize / 2,
-        y: point[1] * MAP_CONFIG.gridSize + MAP_CONFIG.gridSize / 2
-      }));
-    } catch (e) {
-      console.error("路径查找失败:", e);
-      return [];
-    }
-  }
-
-  // 更新小镇时间
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setRealTimeSeconds(prev => prev + 1);
-      
-      // 现实1秒 = 小镇1分钟
-      setTownTime(prev => {
-        const newMinute = prev.minute + 1;
-        if (newMinute >= 60) {
-          return {
-            hour: (prev.hour + 1) % 24,
-            minute: 0
-          };
-        }
-        return {
-          hour: prev.hour,
-          minute: newMinute
-        };
-      });
-    }, 1000);
+    socketRef.current = socket;
     
-    return () => clearInterval(timer);
+    // 监听连接事件
+    socket.on('connect', () => {
+      console.log("WebSocket连接成功");
+      setConnectionStatus("已连接");
+    });
+    
+    socket.on('connect_error', (err) => {
+      console.error("WebSocket连接错误:", err);
+      setConnectionStatus(`连接错误: ${err.message}`);
+    });
+    
+    // 接收初始数据
+    socket.on('init', (data) => {
+      console.log("收到初始数据:", data);
+      setAgents(data.agents);
+      setTownTime(data.townTime);
+    });
+    
+    // 接收时间更新
+    socket.on('timeUpdate', (newTime) => {
+      setTownTime(newTime);
+      setRealTimeSeconds(prev => prev + 1);
+    });
+    
+    // 接收agent位置更新
+    socket.on('agentsUpdate', (updatedAgents) => {
+      console.log("收到agent位置更新:", updatedAgents);
+      
+      setAgents(prevAgents => {
+        // 对每个agent应用平滑动画
+        updatedAgents.forEach((updatedAgent: Agent) => {
+          const prevAgent = prevAgents.find(a => a.id === updatedAgent.id);
+          if (prevAgent) {
+            animateAgentMovement(prevAgent, updatedAgent);
+          }
+        });
+        return updatedAgents;
+      });
+    });
+    
+    // 清理函数
+    return () => {
+      Object.values(animationsRef.current).forEach(animation => animation.stop());
+      socket.disconnect();
+    };
   }, []);
   
-  // 更新数字人位置
-  useEffect(() => {
-    const moveAgents = () => {
-      setAgents(prevAgents => 
-        prevAgents.map(agent => {
-          // 如果没有路径或已到达目标，则生成新路径
-          if (!agent.path || agent.pathIndex === undefined || agent.pathIndex >= agent.path.length) {
-            // 随机生成新目标点
-            const randomTarget = {
-              x: Math.floor(Math.random() * MAP_CONFIG.width),
-              y: Math.floor(Math.random() * MAP_CONFIG.height)
-            };
-            
-            // 避免目标点在障碍物内
-            let validTarget = true;
-            for (const obstacle of MAP_CONFIG.obstacles) {
-              if (
-                randomTarget.x >= obstacle.x && 
-                randomTarget.x <= obstacle.x + obstacle.width && 
-                randomTarget.y >= obstacle.y && 
-                randomTarget.y <= obstacle.y + obstacle.height
-              ) {
-                validTarget = false;
-                break;
-              }
-            }
-            
-            // 如果目标有效，则寻找路径
-            if (validTarget) {
-              const path = findPath(agent.x, agent.y, randomTarget.x, randomTarget.y);
-              return {
-                ...agent,
-                target: randomTarget,
-                path: path,
-                pathIndex: 0
-              };
-            }
-            return agent;
-          }
-          
-          // 沿着路径移动
-          if (agent.path && agent.pathIndex !== undefined && agent.pathIndex < agent.path.length) {
-            const nextPos = agent.path[agent.pathIndex];
-            return {
-              ...agent,
-              x: nextPos.x,
-              y: nextPos.y,
-              pathIndex: agent.pathIndex + 1
-            };
-          }
-          
-          return agent;
-        })
-      );
-    };
+  // 应用平滑动画
+  const animateAgentMovement = (prevAgent: Agent, updatedAgent: Agent) => {
+    const agentCircle = agentCirclesRef.current[updatedAgent.id];
+    const agentText = agentTextsRef.current[updatedAgent.id];
     
-    // 每200毫秒更新一次位置
-    const interval = setInterval(moveAgents, 200);
-    return () => clearInterval(interval);
-  }, []);
+    if (!agentCircle || !agentText) return;
+    
+    // 如果位置没有变化，不需要动画
+    if (prevAgent.x === updatedAgent.x && prevAgent.y === updatedAgent.y) return;
+    
+    // 如果已存在该agent的动画，先停止
+    if (animationsRef.current[updatedAgent.id]) {
+      animationsRef.current[updatedAgent.id].stop();
+    }
+    
+    // 计算移动距离
+    const distanceX = updatedAgent.x - prevAgent.x;
+    const distanceY = updatedAgent.y - prevAgent.y;
+    const totalDistance = Math.sqrt(distanceX * distanceX + distanceY * distanceY);
+    
+    // 设定移动速度（像素/秒）
+    const moveSpeed = 50; // 可以调整此值以改变移动速度
+    
+    // 根据距离和速度计算动画持续时间（毫秒）
+    const duration = (totalDistance / moveSpeed) * 1000;
+    
+    // 创建新动画
+    const animation = new Konva.Animation((frame) => {
+      if (!frame) return;
+      
+      const elapsedTime = frame.time;
+      const progress = Math.min(elapsedTime / duration, 1);
+      
+      // 计算插值位置
+      const newX = prevAgent.x + distanceX * progress;
+      const newY = prevAgent.y + distanceY * progress;
+      
+      // 更新位置
+      agentCircle.x(newX);
+      agentCircle.y(newY);
+      agentText.x(newX - 15);
+      agentText.y(newY - 25);
+      
+      // 如果动画完成，停止
+      if (progress >= 1) {
+        animation.stop();
+        delete animationsRef.current[updatedAgent.id];
+      }
+    }, agentCircle.getLayer());
+    
+    // 存储动画引用并启动
+    animationsRef.current[updatedAgent.id] = animation;
+    animation.start();
+  };
 
   return (
     <div className="relative rounded-lg overflow-hidden border">
+      {/* 连接状态显示 */}
+      <div className="absolute top-2 left-2 bg-card p-2 rounded-md shadow-sm z-10">
+        <div className={`text-xs ${connectionStatus === "已连接" ? "text-green-500" : "text-amber-500"}`}>
+          {connectionStatus}
+        </div>
+      </div>
+      
       {/* 小镇时间显示 */}
       <div className="absolute top-2 right-2 bg-card p-2 rounded-md shadow-sm z-10">
         <div className="text-sm font-semibold">
@@ -250,12 +245,24 @@ export default function TownMap() {
           {agents.map(agent => (
             <Group key={`agent-${agent.id}`}>
               <Circle 
+                ref={node => {
+                  if (node) agentCirclesRef.current[agent.id] = node;
+                }}
                 x={agent.x} 
                 y={agent.y} 
                 radius={10} 
-                fill={agent.color} 
+                fill={agent.color}
+                shadowColor="black"
+                shadowBlur={agent.moving ? 4 : 0}
+                shadowOpacity={agent.moving ? 0.4 : 0}
+                // 添加移动动效
+                shadowOffsetX={agent.moving ? 1 : 0}
+                shadowOffsetY={agent.moving ? 1 : 0}
               />
               <Text
+                ref={node => {
+                  if (node) agentTextsRef.current[agent.id] = node;
+                }}
                 text={agent.name}
                 x={agent.x - 15}
                 y={agent.y - 25}
