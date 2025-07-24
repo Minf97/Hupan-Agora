@@ -45,22 +45,48 @@ const io = new SocketIOServer(server, {
 
 console.log('Socket.IO服务器已初始化，等待连接...');
 
+// 存储agent状态
+let agentStates = [
+  { id: 1, name: '张三', x: 5, y: 5, color: '#FF5733', status: 'idle' },
+  { id: 2, name: '李四', x: 15, y: 10, color: '#33A1FF', status: 'idle' },
+  { id: 3, name: '王五', x: 8, y: 18, color: '#33FF57', status: 'idle' },
+];
+
+let townTime = { hour: 8, minute: 0 };
+
 // 监听连接
 io.on('connection', (socket) => {
   console.log('客户端已连接:', socket.id);
   console.log('客户端传输方式:', socket.conn.transport.name);
 
   // 发送初始状态
-  const agents = [
-    { id: 1, name: '张三', x: 5, y: 5, color: '#FF5733', moving: false },
-    { id: 2, name: '李四', x: 15, y: 10, color: '#33A1FF', moving: false },
-    { id: 3, name: '王五', x: 8, y: 18, color: '#33FF57', moving: false },
-  ];
-
-  const townTime = { hour: 8, minute: 0 };
-
   console.log('发送初始数据到客户端:', socket.id);
-  socket.emit('init', { agents, townTime });
+  // TODO: 这里 agentStates 要从数据库拿
+  socket.emit('init', { agents: agentStates, townTime });
+
+  // 监听任务完成上报
+  socket.on('task_complete', (data) => {
+    console.log('收到任务完成上报:', data);
+
+    // 更新agent状态
+    const agentIndex = agentStates.findIndex(a => a.id === data.agentId);
+    if (agentIndex !== -1) {
+      agentStates[agentIndex] = {
+        ...agentStates[agentIndex],
+        status: data.status,
+        x: data.position?.x || agentStates[agentIndex].x,
+        y: data.position?.y || agentStates[agentIndex].y
+      };
+    }
+
+    // 如果agent变为空闲状态，可以分配新任务
+    if (data.status === 'idle') {
+      // 延迟一下再分配新任务，避免立即分配
+      setTimeout(() => {
+        assignRandomTask(data.agentId, socket);
+      }, 1000);
+    }
+  });
 
   // 监听客户端断开连接
   socket.on('disconnect', (reason) => {
@@ -86,14 +112,71 @@ io.engine.on('connection_error', (err) => {
   console.error('Socket.IO引擎连接错误:', err);
 });
 
-// 模拟数据更新
-let agents = [
-  { id: 1, name: '张三', x: 5, y: 5, color: '#FF5733', moving: false },
-  { id: 2, name: '李四', x: 15, y: 10, color: '#33A1FF', moving: false },
-  { id: 3, name: '王五', x: 8, y: 18, color: '#33FF57', moving: false },
-];
+// 分配随机任务
+function assignRandomTask(agentId, socket) {
+  const agent = agentStates.find(a => a.id === agentId);
+  if (!agent || agent.status !== 'idle') return;
 
-let townTime = { hour: 8, minute: 0 };
+  const taskTypes = ['move', 'talk', 'seek'];
+  // const randomTaskType = taskTypes[Math.floor(Math.random() * taskTypes.length)];
+  const randomTaskType = 'move';
+
+
+  let task;
+  switch (randomTaskType) {
+    case 'move':
+      // 随机移动到一个位置
+      const targetX = Math.floor(Math.random() * 800);
+      const targetY = Math.floor(Math.random() * 600);
+      task = {
+        agentId: agentId,
+        task: {
+          type: 'move',
+          to: { x: targetX, y: targetY }
+        }
+      };
+      break;
+    case 'talk':
+      // 寻找另一个agent进行对话
+      const otherAgents = agentStates.filter(a => a.id !== agentId && a.status === 'idle');
+      if (otherAgents.length > 0) {
+        const targetAgent = otherAgents[Math.floor(Math.random() * otherAgents.length)];
+        task = {
+          agentId: agentId,
+          task: {
+            type: 'talk',
+            targetAgentId: targetAgent.id,
+            duration: 3000 + Math.random() * 4000 // 3-7秒对话
+          }
+        };
+      } else {
+        // 如果没有其他空闲agent，改为移动任务
+        const targetX = Math.floor(Math.random() * 800);
+        const targetY = Math.floor(Math.random() * 600);
+        task = {
+          agentId: agentId,
+          task: {
+            type: 'move',
+            to: { x: targetX, y: targetY }
+          }
+        };
+      }
+      break;
+    case 'seek':
+      task = {
+        agentId: agentId,
+        task: {
+          type: 'seek'
+        }
+      };
+      break;
+  }
+
+  if (task) {
+    console.log(`为Agent ${agentId} 分配任务:`, task);
+    socket.emit('agentTask', task);
+  }
+}
 
 // 每秒更新时间 (1秒 = 1分钟城镇时间)
 setInterval(() => {
@@ -109,48 +192,35 @@ setInterval(() => {
   }
 }, 1000);
 
-// 每2000毫秒更新agent位置
+// 定期为空闲的agent分配任务
 setInterval(() => {
-  agents = agents.map(agent => {
-    // 有20%的概率移动到新位置
-    if (Math.random() < 0.2 && !agent.moving) {
-      const randomDirection = Math.floor(Math.random() * 4); // 0: 上, 1: 右, 2: 下, 3: 左
-      const moveDistance = Math.floor(Math.random() * 5) + 1; // 移动1-5步
-
-      let newX = agent.x;
-      let newY = agent.y;
-
-      switch (randomDirection) {
-        case 0: newY = Math.max(0, agent.y - moveDistance); break;
-        case 1: newX = Math.min(800, agent.x + moveDistance); break;
-        case 2: newY = Math.min(500, agent.y + moveDistance); break;
-        case 3: newX = Math.max(0, agent.x - moveDistance); break;
-      }
-
-      return {
-        ...agent,
-        x: newX,
-        y: newY,
-        moving: true
-      };
-    }
-
-    return {
-      ...agent,
-      moving: false
-    };
-  });
-
   const clientsCount = io.engine.clientsCount;
   if (clientsCount > 0) {
-    io.emit('agentsUpdate', agents);
+    // 找到所有空闲的agent
+    const idleAgents = agentStates.filter(agent => agent.status === 'idle');
+
+    // 为每个空闲agent分配任务（30%概率）
+    idleAgents.forEach(agent => {
+      if (Math.random() < 0.3) {
+        // 获取所有连接的socket
+        const sockets = Array.from(io.sockets.sockets.values());
+        if (sockets.length > 0) {
+          const randomSocket = sockets[Math.floor(Math.random() * sockets.length)];
+
+          assignRandomTask(agent.id, randomSocket);
+        }
+      }
+    });
+
+    // TODO: 这里要上传到后端，同步数据库
   }
-}, 2000);
+}, 3000);
 
 // 定期打印统计信息
 setInterval(() => {
   const clientsCount = io.engine.clientsCount;
   console.log(`当前连接客户端数: ${clientsCount}`);
+  console.log('Agent状态:', agentStates.map(a => `${a.name}: ${a.status}`).join(', '));
   if (clientsCount > 0) {
     const sockets = Array.from(io.sockets.sockets.values());
     console.log('活跃socket:', sockets.map(s => s.id).join(', '));
