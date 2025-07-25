@@ -28,7 +28,7 @@ export const useSocketManager = () => {
   const agentTextsRef = useRef<{ [key: number]: Konva.Text }>({});
 
   // 使用拆分的hooks
-  const { activeConversations, conversationMessages, handleConversationStart, handleConversationEnd } = useConversation();
+  const { activeConversations, conversationMessages, handleConversationStart, handleConversationEnd, handleConversationMessage } = useConversation();
   const thoughtLogger = useThoughtLogger();
 
   const { socket, connectionStatus, reportTaskComplete } = useSocket({
@@ -50,6 +50,9 @@ export const useSocketManager = () => {
     },
     onConversationEnd: (data) => {
       handleConversationEnd(data, setAgents);
+    },
+    onConversationMessage: (data) => {
+      handleConversationMessage(data);
     }
   });
 

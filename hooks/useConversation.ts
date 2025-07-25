@@ -105,10 +105,38 @@ export const useConversation = () => {
     }
   };
 
+  const handleConversationMessage = (data: any) => {
+    const { conversationId, speaker, content, timestamp } = data;
+    
+    const newMessage: ConversationMessage = {
+      conversationId,
+      speaker,
+      content,
+      timestamp: timestamp || Date.now()
+    };
+
+    // 添加新消息到消息列表
+    setConversationMessages((prev) => [...prev, newMessage]);
+
+    // 更新活跃对话中的消息
+    setActiveConversations((prev) => {
+      const newMap = new Map(prev);
+      const conversation = newMap.get(conversationId);
+      if (conversation) {
+        newMap.set(conversationId, {
+          ...conversation,
+          messages: [...conversation.messages, newMessage]
+        });
+      }
+      return newMap;
+    });
+  };
+
   return {
     activeConversations,
     conversationMessages,
     handleConversationStart,
     handleConversationEnd,
+    handleConversationMessage,
   };
 };

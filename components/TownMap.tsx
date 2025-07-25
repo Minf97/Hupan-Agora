@@ -1,15 +1,18 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { Stage, Layer, Rect, Circle, Text, Group, Ring } from "react-konva";
 import Konva from "konva";
 import { MAP_CONFIG } from "@/lib/map-config";
 import { useSocketManager } from "@/hooks/useSocketManager";
 import { ThoughtPanel } from "@/components/ThoughtPanel";
 import { MemoryPanel } from "@/components/MemoryPanel";
+import { AgentInfoPanel } from "@/components/AgentInfoPanel";
 
 export default function TownMap() {
   const stageRef = useRef<Konva.Stage | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
+  
   const {
     socket,
     connectionStatus,
@@ -25,6 +28,16 @@ export default function TownMap() {
 
   // 保留最新20条消息
   const latestMessages = conversationMessages.slice(-20);
+
+  // 处理代理点击事件
+  const handleAgentClick = (agentId: number) => {
+    setSelectedAgentId(agentId);
+  };
+
+  // 关闭代理信息面板
+  const handleCloseAgentInfo = () => {
+    setSelectedAgentId(null);
+  };
 
   return (
     <div className="relative rounded-lg overflow-hidden border">
@@ -176,6 +189,22 @@ export default function TownMap() {
                 stroke={agent.status === "talking" ? "#FFD700" : "transparent"}
                 strokeWidth={agent.status === "talking" ? 2 : 0}
                 scale={agent.status === "talking" ? { x: 1.2, y: 1.2 } : { x: 1, y: 1 }}
+                // 添加点击事件
+                onClick={() => handleAgentClick(agent.id)}
+                onTap={() => handleAgentClick(agent.id)}
+                // 鼠标悬停效果
+                onMouseEnter={(e) => {
+                  const container = e.target.getStage()?.container();
+                  if (container) {
+                    container.style.cursor = 'pointer';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  const container = e.target.getStage()?.container();
+                  if (container) {
+                    container.style.cursor = 'default';
+                  }
+                }}
               />
               <Text
                 ref={(node) => {
@@ -193,6 +222,16 @@ export default function TownMap() {
           ))}
         </Layer>
       </Stage>
+
+      {/* 代理信息面板 */}
+      {selectedAgentId && (
+        <AgentInfoPanel
+          agentId={selectedAgentId}
+          onClose={handleCloseAgentInfo}
+          activeConversations={activeConversations}
+          conversationMessages={conversationMessages}
+        />
+      )}
     </div>
   );
 }

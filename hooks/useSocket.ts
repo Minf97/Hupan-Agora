@@ -14,6 +14,7 @@ interface SocketCallbacks {
   onAgentTask: (task: AgentTask) => void;
   onConversationStart: (data: any) => void;
   onConversationEnd: (data: any) => void;
+  onConversationMessage: (data: any) => void;
 }
 
 const setupSocketListeners = (socket: Socket, callbacks: SocketCallbacks) => {
@@ -37,6 +38,7 @@ const setupSocketListeners = (socket: Socket, callbacks: SocketCallbacks) => {
   socket.on("agentTask", callbacks.onAgentTask);
   socket.on("conversation_start", callbacks.onConversationStart);
   socket.on("conversation_end", callbacks.onConversationEnd);
+  socket.on("conversation_message", callbacks.onConversationMessage);
 
   return () => {
     socket.off("connect", callbacks.onConnect);
@@ -46,6 +48,7 @@ const setupSocketListeners = (socket: Socket, callbacks: SocketCallbacks) => {
     socket.off("agentTask");
     socket.off("conversation_start");
     socket.off("conversation_end");
+    socket.off("conversation_message");
   };
 };
 
