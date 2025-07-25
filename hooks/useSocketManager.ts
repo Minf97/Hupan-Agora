@@ -31,6 +31,8 @@ const setupSocketListeners = (
     ) => void;
     onTimeUpdate: (newTime: { hour: number; minute: number }) => void;
     onAgentTask: (task: AgentTask) => void;
+    onConversationStart: (data: any) => void;
+    onConversationEnd: (data: any) => void;
   }
 ) => {
   // 监听连接事件
@@ -64,6 +66,18 @@ const setupSocketListeners = (
     callbacks.onAgentTask(task);
   });
 
+  // 监听对话开始事件
+  socket.on("conversation_start", (data) => {
+    console.log("对话开始:", data);
+    callbacks.onConversationStart(data);
+  });
+
+  // 监听对话结束事件
+  socket.on("conversation_end", (data) => {
+    console.log("对话结束:", data);
+    callbacks.onConversationEnd(data);
+  });
+
   // 返回清理函数
   return () => {
     socket.off("connect", callbacks.onConnect);
@@ -71,6 +85,8 @@ const setupSocketListeners = (
     socket.off("init");
     socket.off("timeUpdate");
     socket.off("agentTask");
+    socket.off("conversation_start");
+    socket.off("conversation_end");
   };
 };
 
@@ -80,6 +96,21 @@ export const useSocketManager = () => {
   const [townTime, setTownTime] = useState({ hour: 8, minute: 0 });
   const [realTimeSeconds, setRealTimeSeconds] = useState(0);
   const [agents, setAgents] = useState<AgentState[]>([]);
+  const agentsRef = useRef<AgentState[]>([]);
+  
+  // 同步agents状态到ref
+  useEffect(() => {
+    agentsRef.current = agents;
+  }, [agents]);
+  
+  // 添加对话状态管理
+  const [activeConversations, setActiveConversations] = useState(new Map());
+  const [conversationMessages, setConversationMessages] = useState<Array<{
+    conversationId: string;
+    speaker: string;
+    content: string;
+    timestamp: number;
+  }>>([]);
 
   const animationsRef = useRef<{ [key: number]: Konva.Animation }>({});
   const agentCirclesRef = useRef<{ [key: number]: Konva.Circle }>({});
@@ -216,10 +247,10 @@ export const useSocketManager = () => {
       gridClone
     );
 
-    console.log(
-      `为Agent ${agentId} 计算路径，从 (${startGrid.x}, ${startGrid.y}) 到 (${endGrid.x}, ${endGrid.y})`
-    );
-    console.log("路径:", path);
+    // console.log(
+    //   `为Agent ${agentId} 计算路径，从 (${startGrid.x}, ${startGrid.y}) 到 (${endGrid.x}, ${endGrid.y})`
+    // );
+    // console.log("路径:", path);
 
     // 如果没有找到路径，则返回
     if (path.length === 0) {
@@ -299,6 +330,68 @@ export const useSocketManager = () => {
         agentCircle.y(newY);
         agentText.x(newX - 15);
         agentText.y(newY - 25);
+        
+        // 在移动过程中检查是否有相遇
+        // 获取当前所有agents的最新位置
+        const currentPositions = { ...agentCirclesRef.current };
+        const currentAgentsPositions = Object.keys(currentPositions).map(id => {
+          const circle = currentPositions[Number(id)];
+          return {
+            id: Number(id),
+            position: { x: circle.x(), y: circle.y() }
+          };
+        });
+        
+        // 检查当前移动的agent是否与其他空闲agent相遇
+        const currentMovingAgentPosition = { x: newX, y: newY };
+        const otherIdleAgents = agentsRef.current.filter(a => a.id !== agentId);
+        // console.log(otherIdleAgents, "otherIdleAgents", agentsRef.current);
+        
+        
+        for (const idleAgent of otherIdleAgents) {
+          const idleAgentCircle = currentPositions[idleAgent.id];
+          if (idleAgentCircle) {
+            const idleAgentPosition = { x: idleAgentCircle.x(), y: idleAgentCircle.y() };
+            const distance = calculateDistance(currentMovingAgentPosition, idleAgentPosition);
+            
+            if (distance < 30) {
+              console.log(`移动中: Agent ${agentId} 和 Agent ${idleAgent.id} 相遇了！`);
+              
+              // 停止当前动画
+              animation.stop();
+              delete animationsRef.current[agentId];
+              
+              // 更新agent状态为idle
+              setAgents((prev) => {
+                const updatedAgents = prev.map((agent) =>
+                  agent.id === agentId
+                    ? {
+                        ...agent,
+                        position: { x: newX, y: newY },
+                        status: "idle" as const,
+                        target: null,
+                        walkStartTime: undefined,
+                        walkDuration: undefined,
+                      }
+                    : agent
+                );
+                
+                // 手动触发相遇事件
+                const meeting = { agent1: agentId, agent2: idleAgent.id };
+                console.log(`中途相遇: Agent ${meeting.agent1} 和 Agent ${meeting.agent2} 相遇了！`);
+                // 这里可以触发对话事件
+                
+                return updatedAgents;
+              });
+              
+              // 上报任务完成
+              reportTaskComplete(agentId, "idle");
+              
+              // 提前退出动画循环
+              return;
+            }
+          }
+        }
 
         // 如果当前路径段完成
         if (segmentProgress >= 1) {
@@ -460,6 +553,82 @@ export const useSocketManager = () => {
       onAgentTask: (task) => {
         handleAgentTask(task);
       },
+      onConversationStart: (data) => {
+        // 处理对话开始事件
+        const { conversationId, agent1, agent1Name, agent2, agent2Name } = data;
+        
+        // 更新agent状态
+        setAgents((prev) => {
+          return prev.map((agent) =>
+            agent.id === agent1 || agent.id === agent2
+              ? { ...agent, status: "talking" as const }
+              : agent
+          );
+        });
+        
+        // 添加到活跃对话
+        setActiveConversations((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(conversationId, {
+            id: conversationId,
+            agent1,
+            agent1Name,
+            agent2,
+            agent2Name,
+            startTime: Date.now(),
+            messages: []
+          });
+          return newMap;
+        });
+        
+        // 生成随机的初始对话消息
+        setTimeout(() => {
+          const initialMessage = {
+            conversationId,
+            speaker: agent1Name,
+            content: "你好，今天天气不错！",
+            timestamp: Date.now()
+          };
+          
+          setConversationMessages((prev) => [...prev, initialMessage]);
+          
+          setTimeout(() => {
+            const replyMessage = {
+              conversationId,
+              speaker: agent2Name,
+              content: "是的，阳光明媚，心情也很好！",
+              timestamp: Date.now() + 1000
+            };
+            
+            setConversationMessages((prev) => [...prev, replyMessage]);
+          }, 1000);
+        }, 500);
+      },
+      onConversationEnd: (data) => {
+        // 处理对话结束事件
+        const { conversationId, agent1, agent2, messages } = data;
+        
+        // 更新agent状态
+        setAgents((prev) => {
+          return prev.map((agent) =>
+            agent.id === agent1 || agent.id === agent2
+              ? { ...agent, status: "idle" as const }
+              : agent
+          );
+        });
+        
+        // 从活跃对话中移除
+        setActiveConversations((prev) => {
+          const newMap = new Map(prev);
+          newMap.delete(conversationId);
+          return newMap;
+        });
+        
+        // 添加结束消息
+        if (messages && messages.length) {
+          setConversationMessages((prev) => [...prev, ...messages]);
+        }
+      }
     });
 
     return () => {
@@ -478,5 +647,7 @@ export const useSocketManager = () => {
     agentCirclesRef,
     agentTextsRef,
     animationsRef,
+    activeConversations,
+    conversationMessages
   };
 };

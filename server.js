@@ -74,6 +74,33 @@ async function loadAgentsFromDatabase() {
 // 启动时加载agents
 loadAgentsFromDatabase();
 
+// 计算两点之间的距离
+function calculateDistance(pos1, pos2) {
+  return Math.sqrt(Math.pow(pos1.x - pos2.x, 2) + Math.pow(pos1.y - pos2.y, 2));
+}
+
+// 检查是否有相遇发生
+function checkAgentCollision(agentId, position) {
+  const otherAgents = agentStates.filter(a => a.id !== agentId && a.status === 'idle');
+  
+  for (const otherAgent of otherAgents) {
+    const distance = calculateDistance(
+      position,
+      { x: otherAgent.x, y: otherAgent.y }
+    );
+    
+    // 如果距离小于30像素，认为相遇了
+    if (distance < 30) {
+      return otherAgent;
+    }
+  }
+  
+  return null;
+}
+
+// 跟踪活跃的对话
+const activeConversations = new Map();
+
 // 监听连接
 io.on('connection', async (socket) => {
   console.log('客户端已连接:', socket.id);
@@ -101,10 +128,72 @@ io.on('connection', async (socket) => {
         y: data.position?.y || agentStates[agentIndex].y
       };
 
-      agentStates[agentIndex] = {
-        ...agentStates[agentIndex],
-        ...updates
-      };
+      // 检查是否与其他agent相遇
+      const collidedAgent = checkAgentCollision(data.agentId, updates);
+      
+      if (collidedAgent) {
+        console.log(`检测到Agent ${data.agentId} 与 Agent ${collidedAgent.id} 相遇`);
+        
+        // 设置两个agent为对话状态
+        updates.status = 'talking';
+        
+        // 更新当前agent状态
+        agentStates[agentIndex] = {
+          ...agentStates[agentIndex],
+          ...updates
+        };
+        
+        // 更新被相遇的agent状态
+        const otherAgentIndex = agentStates.findIndex(a => a.id === collidedAgent.id);
+        if (otherAgentIndex !== -1) {
+          agentStates[otherAgentIndex] = {
+            ...agentStates[otherAgentIndex],
+            status: 'talking'
+          };
+          
+          // 同步更新到数据库
+          try {
+            await updateAgentState(collidedAgent.id, {
+              status: 'talking'
+            });
+          } catch (error) {
+            console.error(`同步Agent ${collidedAgent.id} 状态到数据库失败:`, error);
+          }
+        }
+        
+        // 记录活跃对话
+        const conversationId = `conv-${data.agentId}-${collidedAgent.id}-${Date.now()}`;
+        activeConversations.set(conversationId, {
+          id: conversationId,
+          agent1: data.agentId,
+          agent1Name: agentStates[agentIndex].name,
+          agent2: collidedAgent.id,
+          agent2Name: collidedAgent.name,
+          startTime: Date.now(),
+          messages: []
+        });
+        
+        // 广播对话开始事件
+        io.emit('conversation_start', {
+          conversationId,
+          agent1: data.agentId,
+          agent1Name: agentStates[agentIndex].name,
+          agent2: collidedAgent.id,
+          agent2Name: collidedAgent.name
+        });
+        
+        // 设置对话结束计时器（5-15秒后结束）
+        const conversationDuration = 5000 + Math.random() * 10000;
+        setTimeout(() => {
+          // 结束对话
+          endConversation(conversationId);
+        }, conversationDuration);
+      } else {
+        agentStates[agentIndex] = {
+          ...agentStates[agentIndex],
+          ...updates
+        };
+      }
 
       // 同步更新到数据库
       try {
@@ -147,6 +236,42 @@ io.on('connection', async (socket) => {
     console.log('收到pong:', socket.id, '延迟:', latency, 'ms');
   });
 });
+
+// 结束对话函数
+function endConversation(conversationId) {
+  const conversation = activeConversations.get(conversationId);
+  if (!conversation) return;
+  
+  console.log(`对话 ${conversationId} 结束`);
+  
+  // 更新agent状态
+  const agent1Index = agentStates.findIndex(a => a.id === conversation.agent1);
+  const agent2Index = agentStates.findIndex(a => a.id === conversation.agent2);
+  
+  if (agent1Index !== -1) {
+    agentStates[agent1Index].status = 'idle';
+    updateAgentState(conversation.agent1, { status: 'idle' })
+      .catch(err => console.error(`更新Agent ${conversation.agent1} 状态失败:`, err));
+  }
+  
+  if (agent2Index !== -1) {
+    agentStates[agent2Index].status = 'idle';
+    updateAgentState(conversation.agent2, { status: 'idle' })
+      .catch(err => console.error(`更新Agent ${conversation.agent2} 状态失败:`, err));
+  }
+  
+  // 广播对话结束事件
+  io.emit('conversation_end', {
+    conversationId,
+    agent1: conversation.agent1,
+    agent2: conversation.agent2,
+    duration: Date.now() - conversation.startTime,
+    messages: conversation.messages
+  });
+  
+  // 从活跃对话中移除
+  activeConversations.delete(conversationId);
+}
 
 io.engine.on('connection_error', (err) => {
   console.error('Socket.IO引擎连接错误:', err);
