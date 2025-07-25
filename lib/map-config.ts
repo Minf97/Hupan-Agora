@@ -139,60 +139,113 @@ export const MAP_CONFIG = {
         { x: 350, y: 320 },
         { x: 400, y: 310 }
       ]
+    },
+    // Main Corridor (connecting office to lobby)
+    {
+      id: 'main-corridor',
+      name: '主走廊',
+      type: RoomType.CORRIDOR,
+      x: 270,
+      y: 200,
+      width: 35,
+      height: 55,
+      color: '#f5f5f5',
+      description: '连接办公室和大厅的主要通道',
+      capacity: 2,
+      spawnPoints: [
+        { x: 285, y: 220 },
+        { x: 290, y: 235 }
+      ]
+    },
+    // Side Corridor (connecting park to lobby)
+    {
+      id: 'side-corridor',
+      name: '侧走廊',
+      type: RoomType.CORRIDOR,
+      x: 450,
+      y: 250,
+      width: 55,
+      height: 50,
+      color: '#f5f5f5',
+      description: '连接花园和大厅的侧通道',
+      capacity: 2,
+      spawnPoints: [
+        { x: 470, y: 270 },
+        { x: 485, y: 285 }
+      ]
     }
   ],
 
   // Wall system for proper boundaries
   walls: [
-    // Office walls
+    // Office walls (complete enclosure)
     { x: 50, y: 50, width: 200, height: 5, type: WallType.EXTERIOR }, // North
     { x: 50, y: 50, width: 5, height: 150, type: WallType.EXTERIOR }, // West
     { x: 245, y: 50, width: 5, height: 150, type: WallType.EXTERIOR }, // East
-    { x: 50, y: 195, width: 100, height: 5, type: WallType.EXTERIOR }, // South-left
-    { x: 200, y: 195, width: 50, height: 5, type: WallType.EXTERIOR }, // South-right
+    { x: 50, y: 195, width: 100, height: 5, type: WallType.EXTERIOR }, // South-left (door gap)
+    { x: 200, y: 195, width: 50, height: 5, type: WallType.EXTERIOR }, // South-right (door gap)
     
-    // Cafe walls
+    // Cafe walls (complete enclosure)
     { x: 50, y: 350, width: 5, height: 180, type: WallType.EXTERIOR }, // West
     { x: 50, y: 525, width: 220, height: 5, type: WallType.EXTERIOR }, // South
-    { x: 265, y: 350, width: 5, height: 100, type: WallType.EXTERIOR }, // East-bottom
-    { x: 265, y: 500, width: 5, height: 30, type: WallType.EXTERIOR }, // East-top
-    { x: 100, y: 350, width: 170, height: 5, type: WallType.EXTERIOR }, // North
+    { x: 265, y: 350, width: 5, height: 100, type: WallType.EXTERIOR }, // East-top (door gap)
+    { x: 265, y: 500, width: 5, height: 30, type: WallType.EXTERIOR }, // East-bottom (door gap)
+    { x: 50, y: 350, width: 50, height: 5, type: WallType.EXTERIOR }, // North-left (door gap)
+    { x: 150, y: 350, width: 120, height: 5, type: WallType.EXTERIOR }, // North-right (door gap)
     
-    // Park walls (partial - it's more open)
+    // Park walls (more enclosed but with openings)
     { x: 500, y: 50, width: 250, height: 5, type: WallType.EXTERIOR }, // North
     { x: 745, y: 50, width: 5, height: 200, type: WallType.EXTERIOR }, // East
-    { x: 500, y: 245, width: 100, height: 5, type: WallType.EXTERIOR }, // South-left
-    { x: 650, y: 245, width: 100, height: 5, type: WallType.EXTERIOR }, // South-right
-    { x: 500, y: 50, width: 5, height: 80, type: WallType.EXTERIOR }, // West-top
-    { x: 500, y: 180, width: 5, height: 70, type: WallType.EXTERIOR }, // West-bottom
+    { x: 500, y: 245, width: 100, height: 5, type: WallType.EXTERIOR }, // South-left (door gap)
+    { x: 650, y: 245, width: 100, height: 5, type: WallType.EXTERIOR }, // South-right (door gap)
+    { x: 500, y: 50, width: 5, height: 80, type: WallType.EXTERIOR }, // West-top (door gap)
+    { x: 500, y: 180, width: 5, height: 70, type: WallType.EXTERIOR }, // West-bottom (door gap)
+    { x: 500, y: 270, width: 5, height: 20, type: WallType.EXTERIOR }, // West-middle (door gap for side corridor)
     
-    // Lobby walls
+    // Lobby walls (with proper door gaps)
     { x: 300, y: 250, width: 150, height: 5, type: WallType.INTERIOR }, // North
     { x: 300, y: 345, width: 150, height: 5, type: WallType.INTERIOR }, // South
-    { x: 300, y: 250, width: 5, height: 40, type: WallType.INTERIOR }, // West-top
-    { x: 300, y: 310, width: 5, height: 40, type: WallType.INTERIOR }, // West-bottom
-    { x: 445, y: 250, width: 5, height: 40, type: WallType.INTERIOR }, // East-top
-    { x: 445, y: 310, width: 5, height: 40, type: WallType.INTERIOR }, // East-bottom
+    { x: 300, y: 250, width: 5, height: 40, type: WallType.INTERIOR }, // West-top (door gap)
+    { x: 300, y: 310, width: 5, height: 40, type: WallType.INTERIOR }, // West-bottom (door gap)
+    { x: 445, y: 250, width: 5, height: 20, type: WallType.INTERIOR }, // East-top (door gap)
+    { x: 445, y: 290, width: 5, height: 60, type: WallType.INTERIOR }, // East-bottom (door gap)
     
-    // Corridor walls (connecting passages)
-    { x: 270, y: 195, width: 5, height: 60, type: WallType.INTERIOR }, // Office-Lobby connector
-    { x: 270, y: 350, width: 5, height: 50, type: WallType.INTERIOR }, // Cafe-Lobby connector
-    { x: 450, y: 250, width: 55, height: 5, type: WallType.INTERIOR }, // Lobby-Park connector top
-    { x: 450, y: 300, width: 55, height: 5, type: WallType.INTERIOR }, // Lobby-Park connector bottom
+    // Main Corridor walls (complete enclosure)
+    { x: 270, y: 200, width: 5, height: 55, type: WallType.INTERIOR }, // West wall
+    { x: 300, y: 200, width: 5, height: 50, type: WallType.INTERIOR }, // East wall-top (door gap)
+    { x: 300, y: 270, width: 5, height: 25, type: WallType.INTERIOR }, // East wall-bottom (door gap)
+    { x: 270, y: 200, width: 30, height: 5, type: WallType.INTERIOR }, // North wall
+    { x: 270, y: 250, width: 30, height: 5, type: WallType.INTERIOR }, // South wall
+    
+    // Side Corridor walls (complete enclosure)
+    { x: 450, y: 250, width: 55, height: 5, type: WallType.INTERIOR }, // North wall
+    { x: 450, y: 295, width: 55, height: 5, type: WallType.INTERIOR }, // South wall
+    // Left wall has door gap to lobby
+    { x: 450, y: 250, width: 5, height: 20, type: WallType.INTERIOR }, // West-top (door gap)
+    { x: 450, y: 290, width: 5, height: 10, type: WallType.INTERIOR }, // West-bottom (door gap)
+    // Right wall has door gap to park
+    { x: 500, y: 250, width: 5, height: 20, type: WallType.INTERIOR }, // East-top (door gap)
+    { x: 500, y: 290, width: 5, height: 10, type: WallType.INTERIOR }, // East-bottom (door gap)
+    
+    // Connecting walls between rooms
+    { x: 270, y: 350, width: 5, height: 50, type: WallType.INTERIOR }, // Cafe-Lobby vertical connector
+    { x: 270, y: 255, width: 30, height: 5, type: WallType.INTERIOR }, // Main corridor to open area
   ],
 
   // Door/opening system
   doors: [
-    // Office to corridor
-    { x: 150, y: 195, width: 50, height: 5, connects: ['office', 'corridor'] as [string, string], isOpen: true },
-    // Cafe to lobby
+    // Office to main corridor
+    { x: 150, y: 195, width: 50, height: 5, connects: ['office', 'main-corridor'] as [string, string], isOpen: true },
+    // Main corridor to lobby
+    { x: 300, y: 290, width: 5, height: 20, connects: ['main-corridor', 'lobby'] as [string, string], isOpen: true },
+    // Lobby to side corridor  
+    { x: 445, y: 270, width: 5, height: 20, connects: ['lobby', 'side-corridor'] as [string, string], isOpen: true },
+    // Side corridor to park
+    { x: 500, y: 270, width: 5, height: 20, connects: ['side-corridor', 'park'] as [string, string], isOpen: true },
+    // Cafe to lobby (direct connection)
     { x: 265, y: 450, width: 5, height: 50, connects: ['cafe', 'lobby'] as [string, string], isOpen: true },
-    // Office to lobby (via corridor)
-    { x: 300, y: 290, width: 5, height: 20, connects: ['corridor', 'lobby'] as [string, string], isOpen: true },
-    // Lobby to park
-    { x: 600, y: 245, width: 50, height: 5, connects: ['lobby', 'park'] as [string, string], isOpen: true },
-    // Park side entrance
-    { x: 500, y: 130, width: 5, height: 50, connects: ['park', 'corridor'] as [string, string], isOpen: true },
+    // Park alternative entrance
+    { x: 500, y: 130, width: 5, height: 50, connects: ['park', 'main-corridor'] as [string, string], isOpen: true },
   ],
 
   // Legacy obstacles for backward compatibility

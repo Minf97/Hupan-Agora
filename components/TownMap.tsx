@@ -118,8 +118,17 @@ export default function TownMap() {
   
   // 处理agent拖拽开始
   const handleAgentDragStart = (agentId: number) => {
-    console.log(`📄 开始拖拽 Agent ${agentId}`);
+    const agent = agents.find(a => a.id === agentId);
+    console.log(`📄 开始拖拽 Agent ${agentId}, 当前状态: ${agent?.status}`);
     setDraggingAgentId(agentId);
+    
+    // 如果agent正在行走，发送信号中断行走动画
+    if (agent?.status === 'walking') {
+      console.log(`⏹️ 中断 Agent ${agentId} 的行走动画`);
+      if (socket) {
+        socket.emit('stopAgentMovement', { agentId });
+      }
+    }
     
     // 清除之前的节流定时器
     if (dragThrottleRef.current[agentId]) {
@@ -429,7 +438,7 @@ export default function TownMap() {
                 // 鼠标悬停效果
                 onMouseEnter={(e) => {
                   const container = e.target.getStage()?.container();
-                  if (container && agent.status !== 'talking') {
+                  if (container && (agent.status === 'idle' || agent.status === 'walking')) {
                     container.style.cursor = 'grab';
                   }
                 }}
@@ -439,8 +448,8 @@ export default function TownMap() {
                     container.style.cursor = 'default';
                   }
                 }}
-                // 拖拽功能（只有空闲状态的agent可以拖拽）
-                draggable={agent.status === 'idle'}
+                // 拖拽功能（空闲和行走状态可以拖拽，对话中不可以）
+                draggable={agent.status === 'idle' || agent.status === 'walking'}
                 onDragStart={() => {
                   handleAgentDragStart(agent.id);
                   // 改变鼠标样式

@@ -53,10 +53,14 @@ export const useSocketManager = () => {
     },
     onConversationMessage: (data) => {
       handleConversationMessage(data);
+    },
+    onStopAgentMovement: (data: { agentId: number }) => {
+      console.log(`收到停止Agent ${data.agentId} 移动的请求`);
+      stopAgentAnimation(data.agentId);
     }
   });
 
-  const { animateAgentMovement, animationsRef, clearConversationState } = useAgentAnimation(
+  const { animateAgentMovement, animationsRef, stopAgentAnimation, clearConversationState } = useAgentAnimation(
     { agentCirclesRef, agentTextsRef },
     {
       onAgentUpdate: setAgents,

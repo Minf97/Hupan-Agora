@@ -3,27 +3,88 @@ import { AgentState } from "@/lib/map-config";
 import { AgentPersonality, calculateChatWillingness, getAgentPersonality } from './agent-personality';
 import { getAIService, InnerThoughtRequest, InnerThoughtResponse } from './ai-service';
 
-// 计算两点间距离
+// 计算两点间距离 - 增强版本
 export const calculateDistance = (
   pos1: { x: number; y: number },
   pos2: { x: number; y: number }
-) => {
-  return Math.sqrt(Math.pow(pos1.x - pos2.x, 2) + Math.pow(pos1.y - pos2.y, 2));
+): number => {
+  // 输入验证
+  if (!pos1 || !pos2) {
+    console.warn('calculateDistance: 缺少位置参数');
+    return Infinity;
+  }
+
+  if (
+    typeof pos1.x !== 'number' || typeof pos1.y !== 'number' ||
+    typeof pos2.x !== 'number' || typeof pos2.y !== 'number' ||
+    isNaN(pos1.x) || isNaN(pos1.y) || isNaN(pos2.x) || isNaN(pos2.y)
+  ) {
+    console.warn('calculateDistance: 位置坐标包含非数字值');
+    return Infinity;
+  }
+
+  const dx = pos1.x - pos2.x;
+  const dy = pos1.y - pos2.y;
+  return Math.sqrt(dx * dx + dy * dy);
 };
 
-// 检查两个agent是否相遇（距离小于30像素）
-export const checkAgentsMeeting = (agent1: AgentState, agent2: AgentState) => {
-  return calculateDistance(agent1.position, agent2.position) < 30;
+// 相遇距离阈值常量
+export const MEETING_DISTANCE_THRESHOLD = 30;
+
+// 调试辅助：获取agent状态摘要
+export const getAgentStatusSummary = (agent: AgentState): string => {
+  if (!agent) return 'null';
+  return `Agent ${agent.id}(${agent.name || 'Unknown'}) 状态:${agent.status} 位置:(${agent.position?.x || 'N/A'}, ${agent.position?.y || 'N/A'})`;
 };
 
-// 检查agent相遇
+// 检查两个agent是否相遇（距离小于阈值）- 增强版本
+export const checkAgentsMeeting = (agent1: AgentState, agent2: AgentState, threshold: number = MEETING_DISTANCE_THRESHOLD): boolean => {
+  // 输入验证
+  if (!agent1 || !agent2 || !agent1.position || !agent2.position) {
+    console.warn('checkAgentsMeeting: 无效的agent或位置数据');
+    return false;
+  }
+
+  // 检查位置数据的有效性
+  if (
+    typeof agent1.position.x !== 'number' || typeof agent1.position.y !== 'number' ||
+    typeof agent2.position.x !== 'number' || typeof agent2.position.y !== 'number' ||
+    isNaN(agent1.position.x) || isNaN(agent1.position.y) ||
+    isNaN(agent2.position.x) || isNaN(agent2.position.y)
+  ) {
+    console.warn('checkAgentsMeeting: 位置坐标包含非数字值');
+    return false;
+  }
+
+  const distance = calculateDistance(agent1.position, agent2.position);
+  return distance < threshold;
+};
+
+// 检查agent相遇 - 优化版本
 export const checkForMeetings = (currentAgents: AgentState[]) => {
   const meetings: { agent1: number; agent2: number }[] = [];
+
+  // 边界检查：确保agents数组有效
+  if (!currentAgents || currentAgents.length < 2) {
+    return meetings;
+  }
 
   for (let i = 0; i < currentAgents.length; i++) {
     for (let j = i + 1; j < currentAgents.length; j++) {
       const agent1 = currentAgents[i];
       const agent2 = currentAgents[j];
+
+      // 增强的状态检查：确保两个agent都存在且有有效位置
+      if (
+        !agent1 || !agent2 || 
+        !agent1.position || !agent2.position ||
+        typeof agent1.position.x !== 'number' || 
+        typeof agent1.position.y !== 'number' ||
+        typeof agent2.position.x !== 'number' || 
+        typeof agent2.position.y !== 'number'
+      ) {
+        continue;
+      }
 
       // 如果两个agent都是空闲状态且相遇了
       if (
@@ -32,6 +93,9 @@ export const checkForMeetings = (currentAgents: AgentState[]) => {
         checkAgentsMeeting(agent1, agent2)
       ) {
         meetings.push({ agent1: agent1.id, agent2: agent2.id });
+        
+        // 添加调试日志
+        console.log(`🔍 检测到相遇: Agent ${agent1.id}(${agent1.name}) 在 (${agent1.position.x}, ${agent1.position.y}) 与 Agent ${agent2.id}(${agent2.name}) 在 (${agent2.position.x}, ${agent2.position.y}) 相遇，距离: ${Math.round(calculateDistance(agent1.position, agent2.position))}px`);
       }
     }
   }
