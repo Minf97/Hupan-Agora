@@ -343,7 +343,7 @@ function assignRandomTask(agentId, socket) {
   }
 }
 
-// 每秒更新时间 (1秒 = 1分钟城镇时间)
+// 每10秒更新时间 (优化: 减少频率从1秒到10秒)
 setInterval(() => {
   townTime = {
     hour: ((townTime.minute + 1) >= 60) ? (townTime.hour + 1) % 24 : townTime.hour,
@@ -352,21 +352,20 @@ setInterval(() => {
 
   const clientsCount = io.engine.clientsCount;
   if (clientsCount > 0) {
-    console.log(`发送时间更新到 ${clientsCount} 个客户端`);
     io.emit('timeUpdate', townTime);
   }
-}, 1000);
+}, 10000);
 
-// 定期为空闲的agent分配任务
+// 定期为空闲的agent分配任务 (优化: 降低频率和概率)
 setInterval(() => {
   const clientsCount = io.engine.clientsCount;
   if (clientsCount > 0) {
     // 找到所有空闲的agent
     const idleAgents = agentStates.filter(agent => agent.status === 'idle');
 
-    // 为每个空闲agent分配任务（30%概率）
+    // 为每个空闲agent分配任务（降低概率从30%到10%）
     idleAgents.forEach(agent => {
-      if (Math.random() < 0.3) {
+      if (Math.random() < 0.1) {
         // 获取所有连接的socket
         const sockets = Array.from(io.sockets.sockets.values());
         if (sockets.length > 0) {
@@ -376,12 +375,10 @@ setInterval(() => {
         }
       }
     });
-
-    // Agent状态更新已在task_complete中同步到数据库
   }
-}, 3000);
+}, 15000);
 
-// 定期打印统计信息
+// 定期打印统计信息 (优化: 降低频率)
 setInterval(() => {
   const clientsCount = io.engine.clientsCount;
   console.log(`当前连接客户端数: ${clientsCount}`);

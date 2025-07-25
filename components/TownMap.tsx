@@ -6,6 +6,7 @@ import Konva from "konva";
 import { MAP_CONFIG } from "@/lib/map-config";
 import { useSocketManager } from "@/hooks/useSocketManager";
 import { ThoughtPanel } from "@/components/ThoughtPanel";
+import { MemoryPanel } from "@/components/MemoryPanel";
 
 export default function TownMap() {
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -76,6 +77,15 @@ export default function TownMap() {
         <ThoughtPanel 
           thoughts={thoughtLogger.thoughts} 
           onClear={thoughtLogger.clearThoughts}
+          isLoading={thoughtLogger.isLoading}
+          onRefresh={thoughtLogger.refreshThoughts}
+        />
+      </div>
+
+      {/* 记忆面板 */}
+      <div className="absolute bottom-2 left-[22rem] z-10">
+        <MemoryPanel 
+          agentId={agents.length > 0 ? agents[0].id : undefined}
         />
       </div>
 

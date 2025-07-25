@@ -8,14 +8,16 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Brain, MessageCircle, Target, X, Minimize2 } from 'lucide-react';
+import { Brain, MessageCircle, Target, X, Minimize2, RefreshCw } from 'lucide-react';
 
 interface ThoughtPanelProps {
   thoughts: ThoughtRecord[];
   onClear: () => void;
+  isLoading?: boolean;
+  onRefresh?: () => void;
 }
 
-export function ThoughtPanel({ thoughts, onClear }: ThoughtPanelProps) {
+export function ThoughtPanel({ thoughts, onClear, isLoading = false, onRefresh }: ThoughtPanelProps) {
   const [isMinimized, setIsMinimized] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
 
@@ -78,6 +80,17 @@ export function ThoughtPanel({ thoughts, onClear }: ThoughtPanelProps) {
           💭 思考记录 ({thoughts.length})
         </CardTitle>
         <div className="flex items-center space-x-1">
+          {onRefresh && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onRefresh}
+              disabled={isLoading}
+              className="h-6 w-6 p-0"
+            >
+              <RefreshCw className={`h-3 w-3 ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -109,7 +122,11 @@ export function ThoughtPanel({ thoughts, onClear }: ThoughtPanelProps) {
         <CardContent className="flex-1 p-3 pt-0 min-h-0">
           <ScrollArea className="h-full w-full">
             <div className="space-y-2 pr-4">
-              {recentThoughts.length === 0 ? (
+              {isLoading ? (
+                <div className="text-center text-sm text-muted-foreground py-8">
+                  加载中...
+                </div>
+              ) : recentThoughts.length === 0 ? (
                 <div className="text-center text-sm text-muted-foreground py-8">
                   暂无思考记录
                 </div>

@@ -57,6 +57,9 @@ export async function POST(request: NextRequest) {
       importance: importance || 1,
     }).returning();
 
+    console.log(newMemory, "newMemory");
+    
+
     return NextResponse.json(newMemory[0], { status: 201 });
   } catch (error) {
     console.error("创建记忆失败:", error);
@@ -65,4 +68,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}
