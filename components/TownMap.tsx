@@ -5,6 +5,7 @@ import { Stage, Layer, Rect, Circle, Text, Group, Ring } from "react-konva";
 import Konva from "konva";
 import { MAP_CONFIG } from "@/lib/map-config";
 import { useSocketManager } from "@/hooks/useSocketManager";
+import { ThoughtPanel } from "@/components/ThoughtPanel";
 
 export default function TownMap() {
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -17,7 +18,8 @@ export default function TownMap() {
     agentCirclesRef,
     agentTextsRef,
     activeConversations,
-    conversationMessages
+    conversationMessages,
+    thoughtLogger
   } = useSocketManager();
 
   // 保留最新20条消息
@@ -67,6 +69,14 @@ export default function TownMap() {
             <span className="ml-1 text-muted-foreground">{msg.content}</span>
           </div>
         ))}
+      </div>
+
+      {/* 思考记录面板 */}
+      <div className="absolute bottom-2 left-2 z-10">
+        <ThoughtPanel 
+          thoughts={thoughtLogger.thoughts} 
+          onClear={thoughtLogger.clearThoughts}
+        />
       </div>
 
       {/* 地图画布 */}

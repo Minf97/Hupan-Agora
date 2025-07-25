@@ -5,12 +5,19 @@ import Konva from "konva";
 import { useSocket } from "./useSocket";
 import { useAgentAnimation } from "./useAgentAnimation";
 import { useConversation } from "./useConversation";
+import { useThoughtLogger } from "./useThoughtLogger";
+import { initializeAIService } from "@/lib/ai-config";
 
 export const useSocketManager = () => {
   const [townTime, setTownTime] = useState({ hour: 8, minute: 0 });
   const [realTimeSeconds, setRealTimeSeconds] = useState(0);
   const [agents, setAgents] = useState<AgentState[]>([]);
   const agentsRef = useRef<AgentState[]>([]);
+  
+  // 初始化AI服务
+  useEffect(() => {
+    initializeAIService();
+  }, []);
   
   // 同步agents状态到ref
   useEffect(() => {
@@ -22,6 +29,7 @@ export const useSocketManager = () => {
 
   // 使用拆分的hooks
   const { activeConversations, conversationMessages, handleConversationStart, handleConversationEnd } = useConversation();
+  const thoughtLogger = useThoughtLogger();
 
   const { socket, connectionStatus, reportTaskComplete } = useSocket({
     onConnect: () => {},
@@ -53,6 +61,15 @@ export const useSocketManager = () => {
         reportTaskComplete(agentId, status, position);
       },
       getCurrentAgents: () => agentsRef.current,
+      onAgentEncounter: (agent1Id, agent2Id, location) => {
+        console.log(`Agent相遇事件被触发: ${agent1Id} 和 ${agent2Id} 在 ${location}`);
+        // 这里可以添加额外的业务逻辑，比如统计、日志等
+      },
+      onThoughtLog: {
+        addInnerThought: thoughtLogger.addInnerThought,
+        addDecision: thoughtLogger.addDecision,
+        addConversation: thoughtLogger.addConversation,
+      },
     }
   );
 
@@ -61,7 +78,7 @@ export const useSocketManager = () => {
 
     switch (task.task.type) {
       case "move":
-        console.log(task, "move task");
+        // console.log(task, "move task");
         if (task.task.to) {
           animateAgentMovement(agentId, task.task.to);
         }
@@ -130,6 +147,7 @@ export const useSocketManager = () => {
     agentTextsRef,
     animationsRef,
     activeConversations,
-    conversationMessages
+    conversationMessages,
+    thoughtLogger
   };
 };

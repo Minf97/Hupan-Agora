@@ -3,7 +3,9 @@ import { useRef } from "react";
 import Konva from "konva";
 import PF from "pathfinding";
 import { MAP_CONFIG, AgentState } from "@/lib/map-config";
-import { calculateDistance, checkForMeetings } from "@/lib/agent-utils";
+import { calculateDistance, checkForMeetings, processAgentEncounter } from "@/lib/agent-utils";
+import { getConversationManager } from "@/lib/conversation-manager";
+import { getAgentPersonality } from "@/lib/agent-personality";
 
 interface AnimationRefs {
   agentCirclesRef: React.MutableRefObject<{ [key: number]: Konva.Circle }>;
@@ -14,11 +16,181 @@ interface AnimationCallbacks {
   onAgentUpdate: (updater: (prev: AgentState[]) => AgentState[]) => void;
   onTaskComplete: (agentId: number, status: AgentState["status"], position: { x: number; y: number }) => void;
   getCurrentAgents: () => AgentState[];
+  onAgentEncounter?: (agent1Id: number, agent2Id: number, location: string) => void;
+  onThoughtLog?: {
+    addInnerThought: (agentId: number, agentName: string, thought: string, metadata?: any) => void;
+    addDecision: (agentId: number, agentName: string, decision: string, metadata?: any) => void;
+    addConversation: (agentId: number, agentName: string, message: string, metadata?: any) => void;
+  };
 }
 
 export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallbacks) => {
   const animationsRef = useRef<{ [key: number]: Konva.Animation }>({});
   const gridRef = useRef(createGrid());
+
+  // 处理Agent相遇事件
+  const handleAgentEncounter = async (agent1Id: number, agent2Id: number, location: string) => {
+    try {
+      const conversationManager = getConversationManager();
+      
+      // 检查是否已经在对话中
+      if (conversationManager.isAgentInConversation(agent1Id) || 
+          conversationManager.isAgentInConversation(agent2Id)) {
+        console.log(`Agent ${agent1Id} 或 Agent ${agent2Id} 已经在对话中`);
+        return;
+      }
+
+      // 获取当前时间
+      const now = new Date();
+      const encounterResult = await processAgentEncounter(agent1Id, agent2Id, {
+        location,
+        timeOfDay: now.getHours(),
+        townTime: { hour: now.getHours(), minute: now.getMinutes() }
+      });
+
+      console.log(`Agent ${agent1Id} 内心想法:`, encounterResult.agent1Thoughts.internal_monologue);
+      console.log(`Agent ${agent2Id} 内心想法:`, encounterResult.agent2Thoughts.internal_monologue);
+
+      // 记录内心思考
+      if (callbacks.onThoughtLog) {
+        const agent1Name = getAgentPersonality(agent1Id).name;
+        const agent2Name = getAgentPersonality(agent2Id).name;
+        
+        callbacks.onThoughtLog.addInnerThought(
+          agent1Id,
+          agent1Name,
+          encounterResult.agent1Thoughts.internal_monologue,
+          {
+            confidence: encounterResult.agent1Thoughts.confidence,
+            reasoning: encounterResult.agent1Thoughts.reasoning,
+            shouldInitiateChat: encounterResult.agent1Thoughts.shouldInitiateChat
+          }
+        );
+        
+        callbacks.onThoughtLog.addInnerThought(
+          agent2Id,
+          agent2Name,
+          encounterResult.agent2Thoughts.internal_monologue,
+          {
+            confidence: encounterResult.agent2Thoughts.confidence,
+            reasoning: encounterResult.agent2Thoughts.reasoning,
+            shouldInitiateChat: encounterResult.agent2Thoughts.shouldInitiateChat
+          }
+        );
+      }
+
+      // 如果双方都有意愿对话，或者一方非常主动
+      const shouldStartConversation = 
+        (encounterResult.agent1WantsToChat && encounterResult.agent2WantsToChat) ||
+        (encounterResult.agent1WantsToChat && encounterResult.agent1Thoughts.confidence > 0.8) ||
+        (encounterResult.agent2WantsToChat && encounterResult.agent2Thoughts.confidence > 0.8);
+
+      if (shouldStartConversation) {
+        console.log(`开始对话: Agent ${agent1Id} 和 Agent ${agent2Id}`);
+        
+        // 记录决策
+        if (callbacks.onThoughtLog) {
+          const agent1Name = getAgentPersonality(agent1Id).name;
+          const agent2Name = getAgentPersonality(agent2Id).name;
+          
+          if (encounterResult.agent1WantsToChat) {
+            callbacks.onThoughtLog.addDecision(
+              agent1Id,
+              agent1Name,
+              `决定与${agent2Name}开始对话`,
+              { confidence: encounterResult.agent1Thoughts.confidence }
+            );
+          }
+          
+          if (encounterResult.agent2WantsToChat) {
+            callbacks.onThoughtLog.addDecision(
+              agent2Id,
+              agent2Name,
+              `决定与${agent1Name}开始对话`,
+              { confidence: encounterResult.agent2Thoughts.confidence }
+            );
+          }
+        }
+        
+        // 创建对话
+        const conversation = await conversationManager.startConversation({
+          participants: [agent1Id, agent2Id],
+          location,
+          initiator: encounterResult.agent1WantsToChat ? agent1Id : agent2Id
+        });
+
+        // 更新Agent状态为“talking”
+        callbacks.onAgentUpdate((prev) =>
+          prev.map((agent) =>
+            agent.id === agent1Id || agent.id === agent2Id
+              ? { ...agent, status: "talking" as const }
+              : agent
+          )
+        );
+
+        // 开始对话循环
+        startConversationLoop(conversation.id);
+      } else {
+        console.log(`Agent ${agent1Id} 和 Agent ${agent2Id} 选择不开始对话`);
+      }
+    } catch (error) {
+      console.error('处理Agent相遇失败:', error);
+    }
+  };
+
+  // 对话循环
+  const startConversationLoop = async (conversationId: string) => {
+    const conversationManager = getConversationManager();
+    
+    const continueConversation = async () => {
+      const message = await conversationManager.continueConversation(conversationId);
+      
+      if (message) {
+        console.log(`${message.speaker}: ${message.content}`);
+        
+        // 记录对话
+        if (callbacks.onThoughtLog) {
+          const conversation = conversationManager.getConversation(conversationId);
+          if (conversation) {
+            // 找到说话者的ID
+            const speakerId = conversation.participants.find(id => 
+              getAgentPersonality(id).name === message.speaker
+            );
+            
+            if (speakerId) {
+              callbacks.onThoughtLog.addConversation(
+                speakerId,
+                message.speaker,
+                message.content,
+                {
+                  emotion: message.emotion,
+                  conversationId
+                }
+              );
+            }
+          }
+        }
+        
+        // 继续对话（在一定延迟后）
+        setTimeout(continueConversation, 2000 + Math.random() * 3000); // 2-5秒随机延迟
+      } else {
+        // 对话结束，更新Agent状态
+        const conversation = conversationManager.getConversation(conversationId);
+        if (conversation) {
+          callbacks.onAgentUpdate((prev) =>
+            prev.map((agent) =>
+              conversation.participants.includes(agent.id)
+                ? { ...agent, status: "idle" as const }
+                : agent
+            )
+          );
+        }
+      }
+    };
+
+    // 开始第一轮对话
+    setTimeout(continueConversation, 1000);
+  };
 
   function createGrid() {
     const gridWidth = Math.ceil(MAP_CONFIG.width / MAP_CONFIG.gridSize);
@@ -193,9 +365,11 @@ export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallb
                     : agent
                 );
 
-                console.log(`中途相遇: Agent ${agentId} 和 Agent ${idleAgent.id} 相遇了！`);
                 return updatedAgents;
               });
+
+              // 触发相遇事件，可能开始对话
+              handleAgentEncounter(agentId, idleAgent.id, "街道");
 
               callbacks.onTaskComplete(agentId, "idle", { x: newX, y: newY });
               return;
@@ -241,6 +415,8 @@ export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallb
               const meetings = checkForMeetings(updatedAgents);
               meetings.forEach((meeting) => {
                 console.log(`Agent ${meeting.agent1} 和 Agent ${meeting.agent2} 相遇了！`);
+                // 触发相遇事件，可能开始对话
+                handleAgentEncounter(meeting.agent1, meeting.agent2, "街道");
               });
 
               return updatedAgents;
