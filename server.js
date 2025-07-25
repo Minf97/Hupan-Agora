@@ -203,6 +203,43 @@ io.on('connection', async (socket) => {
     }
   });
 
+  // 监听停止agent移动（拖拽打断walking任务）
+  socket.on('stopAgentMovement', async (data) => {
+    const { agentId } = data;
+    console.log(`收到停止Agent ${agentId} 移动请求 - 拖拽打断walking任务`);
+
+    // 更新内存中的agent状态
+    const agentIndex = agentStates.findIndex(a => a.id === agentId);
+    if (agentIndex !== -1) {
+      const agent = agentStates[agentIndex];
+      
+      // 立即清除当前任务并设置为idle状态
+      agentStates[agentIndex] = {
+        ...agent,
+        status: 'idle',
+        currentTask: null
+      };
+
+      // 同步更新到数据库
+      try {
+        await updateAgentState(agentId, {
+          status: 'idle',
+          currentTask: null
+        });
+        console.log(`Agent ${agentId} 任务已清除，状态重置为idle`);
+      } catch (error) {
+        console.error(`同步Agent ${agentId} 状态到数据库失败:`, error);
+      }
+
+      // 广播状态更新给其他客户端
+      socket.broadcast.emit('agentStateUpdate', {
+        agentId,
+        status: 'idle',
+        position: { x: agent.x, y: agent.y }
+      });
+    }
+  });
+
   // 监听任务完成上报
   socket.on('task_complete', async (data) => {
     console.log('收到任务完成上报:', data);

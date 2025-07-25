@@ -153,6 +153,7 @@ export const useSocketManager = () => {
     agentCirclesRef,
     agentTextsRef,
     animationsRef,
+    stopAgentAnimation,
     activeConversations,
     conversationMessages,
     thoughtLogger

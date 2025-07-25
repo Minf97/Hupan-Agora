@@ -22,6 +22,7 @@ export default function TownMap() {
     agents,
     agentCirclesRef,
     agentTextsRef,
+    stopAgentAnimation,
     activeConversations,
     conversationMessages,
     thoughtLogger,
@@ -122,9 +123,14 @@ export default function TownMap() {
     console.log(`📄 开始拖拽 Agent ${agentId}, 当前状态: ${agent?.status}`);
     setDraggingAgentId(agentId);
     
-    // 如果agent正在行走，发送信号中断行走动画
+    // 如果agent正在行走，发送信号中断行走动画和服务器任务
     if (agent?.status === 'walking') {
-      console.log(`⏹️ 中断 Agent ${agentId} 的行走动画`);
+      console.log(`⏹️ 中断 Agent ${agentId} 的行走动画和服务器任务`);
+      
+      // 立即停止本地动画
+      stopAgentAnimation(agentId);
+      
+      // 通知服务器停止任务
       if (socket) {
         socket.emit('stopAgentMovement', { agentId });
       }
@@ -136,11 +142,11 @@ export default function TownMap() {
       dragThrottleRef.current[agentId] = null;
     }
     
-    // 通知服务器拖拽开始（可选）
+    // 通知服务器拖拽开始
     if (socket) {
       socket.emit('agentUpdate', {
         agentId,
-        status: 'busy', // 标记为忙碌状态，防止任务分配
+        status: 'idle', // 拖拽中也是空闲状态，只是位置在改变
         position: agents.find(a => a.id === agentId)?.position
       });
     }
@@ -159,7 +165,7 @@ export default function TownMap() {
       if (socket && draggingAgentId === agentId) {
         socket.emit('agentUpdate', {
           agentId,
-          status: 'busy',
+          status: 'idle', // 拖拽中保持idle状态
           position: validPos
         });
       }
@@ -197,11 +203,19 @@ export default function TownMap() {
       });
     }
     
-    // 更新本地agent状态
+    // 更新本地agent状态 - 完全重置为idle状态
     setAgents((prev) => 
       prev.map((agent) => 
         agent.id === agentId 
-          ? { ...agent, position: validPos }
+          ? { 
+              ...agent, 
+              position: validPos,
+              status: 'idle' as const,
+              target: null,
+              walkStartTime: undefined,
+              walkDuration: undefined,
+              talkingWith: undefined
+            }
           : agent
       )
     );
