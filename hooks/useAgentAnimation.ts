@@ -48,9 +48,6 @@ export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallb
         townTime: { hour: now.getHours(), minute: now.getMinutes() }
       });
 
-      console.log(`Agent ${agent1Id} 内心想法:`, encounterResult.agent1Thoughts.internal_monologue);
-      console.log(`Agent ${agent2Id} 内心想法:`, encounterResult.agent2Thoughts.internal_monologue);
-
       // 记录内心思考
       if (callbacks.onThoughtLog) {
         const agent1Name = getAgentPersonality(agent1Id).name;
