@@ -49,14 +49,14 @@ export const useSocketManager = () => {
       handleConversationStart(data, setAgents);
     },
     onConversationEnd: (data) => {
-      handleConversationEnd(data, setAgents);
+      handleConversationEnd(data, setAgents, clearConversationState);
     },
     onConversationMessage: (data) => {
       handleConversationMessage(data);
     }
   });
 
-  const { animateAgentMovement, animationsRef } = useAgentAnimation(
+  const { animateAgentMovement, animationsRef, clearConversationState } = useAgentAnimation(
     { agentCirclesRef, agentTextsRef },
     {
       onAgentUpdate: setAgents,

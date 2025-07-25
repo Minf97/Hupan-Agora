@@ -2,7 +2,7 @@
 import { useRef } from "react";
 import Konva from "konva";
 import PF from "pathfinding";
-import { MAP_CONFIG, AgentState } from "@/lib/map-config";
+import { MAP_CONFIG, AgentState, Wall, Door } from "@/lib/map-config";
 import { calculateDistance, checkForMeetings, processAgentEncounter } from "@/lib/agent-utils";
 import { getConversationManager } from "@/lib/conversation-manager";
 import { getAgentPersonality } from "@/lib/agent-personality";
@@ -27,6 +27,57 @@ interface AnimationCallbacks {
 export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallbacks) => {
   const animationsRef = useRef<{ [key: number]: Konva.Animation }>({});
   const gridRef = useRef(createGrid());
+  
+  // 相遇状态管理
+  const encounterCooldowns = useRef<{ [key: string]: number }>({});
+  const activeConversations = useRef<Set<number>>(new Set());
+  const ENCOUNTER_COOLDOWN = 30000; // 30秒冷却时间
+  const ENCOUNTER_DISTANCE = 30; // 相遇距离
+  
+  // 生成相遇键（确保顺序一致）
+  const getEncounterKey = (agent1Id: number, agent2Id: number): string => {
+    return agent1Id < agent2Id ? `${agent1Id}-${agent2Id}` : `${agent2Id}-${agent1Id}`;
+  };
+  
+  // 检查是否可以相遇
+  const canEncounter = (agent1Id: number, agent2Id: number): boolean => {
+    // 检查是否在冷却时间内
+    const encounterKey = getEncounterKey(agent1Id, agent2Id);
+    const lastEncounter = encounterCooldowns.current[encounterKey];
+    const now = Date.now();
+    
+    if (lastEncounter && (now - lastEncounter) < ENCOUNTER_COOLDOWN) {
+      console.log(`⏱️ 相遇冷却中: Agent ${agent1Id} ↔ Agent ${agent2Id}, 剩余 ${Math.round((ENCOUNTER_COOLDOWN - (now - lastEncounter)) / 1000)}秒`);
+      return false;
+    }
+    
+    // 检查是否已经在对话中
+    if (activeConversations.current.has(agent1Id) || activeConversations.current.has(agent2Id)) {
+      console.log(`💬 无法相遇: Agent ${agent1Id} 或 Agent ${agent2Id} 正在对话中`);
+      return false;
+    }
+    
+    return true;
+  };
+  
+  // 记录相遇
+  const recordEncounter = (agent1Id: number, agent2Id: number): void => {
+    const encounterKey = getEncounterKey(agent1Id, agent2Id);
+    encounterCooldowns.current[encounterKey] = Date.now();
+    
+    // 标记为正在对话
+    activeConversations.current.add(agent1Id);
+    activeConversations.current.add(agent2Id);
+    
+    console.log(`📅 记录相遇: Agent ${agent1Id} ↔ Agent ${agent2Id}, 冷却时间: ${ENCOUNTER_COOLDOWN / 1000}秒`);
+  };
+  
+  // 清除对话状态
+  const clearConversationState = (agent1Id: number, agent2Id: number): void => {
+    activeConversations.current.delete(agent1Id);
+    activeConversations.current.delete(agent2Id);
+    console.log(`🧹 清除对话状态: Agent ${agent1Id} 和 Agent ${agent2Id}`);
+  };
 
   // 处理Agent相遇事件
   const handleAgentEncounter = async (agent1Id: number, agent2Id: number, location: string) => {
@@ -194,6 +245,41 @@ export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallb
     const gridHeight = Math.ceil(MAP_CONFIG.height / MAP_CONFIG.gridSize);
     const grid = new PF.Grid(gridWidth, gridHeight);
 
+    // Mark wall areas as non-walkable
+    MAP_CONFIG.walls.forEach((wall: Wall) => {
+      const startX = Math.floor(wall.x / MAP_CONFIG.gridSize);
+      const startY = Math.floor(wall.y / MAP_CONFIG.gridSize);
+      const endX = Math.ceil((wall.x + wall.width) / MAP_CONFIG.gridSize);
+      const endY = Math.ceil((wall.y + wall.height) / MAP_CONFIG.gridSize);
+
+      for (let x = startX; x < endX; x++) {
+        for (let y = startY; y < endY; y++) {
+          if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
+            grid.setWalkableAt(x, y, false);
+          }
+        }
+      }
+    });
+
+    // Mark door areas as walkable (doors allow passage)
+    MAP_CONFIG.doors.forEach((door: Door) => {
+      if (door.isOpen) {
+        const startX = Math.floor(door.x / MAP_CONFIG.gridSize);
+        const startY = Math.floor(door.y / MAP_CONFIG.gridSize);
+        const endX = Math.ceil((door.x + door.width) / MAP_CONFIG.gridSize);
+        const endY = Math.ceil((door.y + door.height) / MAP_CONFIG.gridSize);
+
+        for (let x = startX; x < endX; x++) {
+          for (let y = startY; y < endY; y++) {
+            if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
+              grid.setWalkableAt(x, y, true);
+            }
+          }
+        }
+      }
+    });
+
+    // Handle legacy obstacles for backward compatibility
     MAP_CONFIG.obstacles.forEach(
       (obstacle: { x: number; y: number; width: number; height: number }) => {
         const startX = Math.floor(obstacle.x / MAP_CONFIG.gridSize);
@@ -329,10 +415,14 @@ export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallb
         agentText.x(newX - 15);
         agentText.y(newY - 25);
 
-        // 检查移动中的相遇
+        // 检查移动中的相遇（优化：只有空闲状态的agent才能相遇）
         const currentMovingAgentPosition = { x: newX, y: newY };
         const currentAgents = callbacks.getCurrentAgents();
-        const otherIdleAgents = currentAgents.filter(a => a.id !== agentId);
+        const otherIdleAgents = currentAgents.filter(a => 
+          a.id !== agentId && 
+          a.status === "idle" && 
+          !activeConversations.current.has(a.id) // 确保目标agent不在对话中
+        );
 
         for (const idleAgent of otherIdleAgents) {
           const idleAgentCircle = agentCirclesRef.current[idleAgent.id];
@@ -340,8 +430,16 @@ export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallb
             const idleAgentPosition = { x: idleAgentCircle.x(), y: idleAgentCircle.y() };
             const distance = calculateDistance(currentMovingAgentPosition, idleAgentPosition);
 
-            if (distance < 30) {
-              console.log(`移动中: Agent ${agentId} 和 Agent ${idleAgent.id} 相遇了！`);
+            if (distance < ENCOUNTER_DISTANCE) {
+              // 检查是否可以相遇（冷却时间、对话状态等）
+              if (!canEncounter(agentId, idleAgent.id)) {
+                continue; // 跳过这个agent，检查下一个
+              }
+
+              console.log(`✨ 移动中相遇: Agent ${agentId} 和 Agent ${idleAgent.id} 相遇了！距离: ${Math.round(distance)}`);
+
+              // 记录相遇，防止重复
+              recordEncounter(agentId, idleAgent.id);
 
               // 停止动画
               animation.stop();
@@ -411,9 +509,14 @@ export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallb
               // 检查新的相遇
               const meetings = checkForMeetings(updatedAgents);
               meetings.forEach((meeting) => {
-                console.log(`Agent ${meeting.agent1} 和 Agent ${meeting.agent2} 相遇了！`);
-                // 触发相遇事件，可能开始对话
-                handleAgentEncounter(meeting.agent1, meeting.agent2, "街道");
+                // 检查是否可以相遇（避免重复相遇）
+                if (canEncounter(meeting.agent1, meeting.agent2)) {
+                  console.log(`🎯 到达目标点相遇: Agent ${meeting.agent1} 和 Agent ${meeting.agent2} 相遇了！`);
+                  // 记录相遇
+                  recordEncounter(meeting.agent1, meeting.agent2);
+                  // 触发相遇事件，可能开始对话
+                  handleAgentEncounter(meeting.agent1, meeting.agent2, "街道");
+                }
               });
 
               return updatedAgents;
@@ -432,5 +535,9 @@ export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallb
   return {
     animateAgentMovement,
     animationsRef,
+    // 暴露对话状态管理方法
+    clearConversationState,
+    getActiveConversations: () => Array.from(activeConversations.current),
+    getEncounterCooldowns: () => ({ ...encounterCooldowns.current }),
   };
 };

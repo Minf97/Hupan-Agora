@@ -163,6 +163,46 @@ io.on('connection', async (socket) => {
   console.log('发送初始数据到客户端:', socket.id);
   socket.emit('init', { agents: agentStates, townTime });
 
+  // 监听agent状态更新（用于拖拽等实时更新）
+  socket.on('agentUpdate', async (data) => {
+    const { agentId, status, position } = data;
+    console.log(`收到Agent ${agentId} 状态更新:`, { status, position });
+
+    // 更新内存中的agent状态
+    const agentIndex = agentStates.findIndex(a => a.id === agentId);
+    if (agentIndex !== -1) {
+      const updates = {
+        status: status || agentStates[agentIndex].status,
+        x: position?.x || agentStates[agentIndex].x,
+        y: position?.y || agentStates[agentIndex].y
+      };
+
+      agentStates[agentIndex] = {
+        ...agentStates[agentIndex],
+        ...updates
+      };
+
+      // 同步更新到数据库
+      try {
+        await updateAgentState(agentId, {
+          x: updates.x,
+          y: updates.y,
+          status: updates.status
+        });
+        console.log(`Agent ${agentId} 状态已同步到数据库`);
+      } catch (error) {
+        console.error(`同步Agent ${agentId} 状态到数据库失败:`, error);
+      }
+
+      // 广播状态更新给其他客户端
+      socket.broadcast.emit('agentStateUpdate', {
+        agentId,
+        status: updates.status,
+        position: { x: updates.x, y: updates.y }
+      });
+    }
+  });
+
   // 监听任务完成上报
   socket.on('task_complete', async (data) => {
     console.log('收到任务完成上报:', data);
@@ -301,27 +341,27 @@ function endConversation(conversationId) {
 
   console.log(`对话 ${conversationId} 结束`);
 
-  // 更新agent状态
-  const agent1Index = agentStates.findIndex(a => a.id === conversation.agent1);
-  const agent2Index = agentStates.findIndex(a => a.id === conversation.agent2);
+  // 更新agent状态（使用正确的字段名）
+  const agent1Index = agentStates.findIndex(a => a.id === conversation.agent1Id);
+  const agent2Index = agentStates.findIndex(a => a.id === conversation.agent2Id);
 
   if (agent1Index !== -1) {
     agentStates[agent1Index].status = 'idle';
-    updateAgentState(conversation.agent1, { status: 'idle' })
-      .catch(err => console.error(`更新Agent ${conversation.agent1} 状态失败:`, err));
+    updateAgentState(conversation.agent1Id, { status: 'idle' })
+      .catch(err => console.error(`更新Agent ${conversation.agent1Id} 状态失败:`, err));
   }
 
   if (agent2Index !== -1) {
     agentStates[agent2Index].status = 'idle';
-    updateAgentState(conversation.agent2, { status: 'idle' })
-      .catch(err => console.error(`更新Agent ${conversation.agent2} 状态失败:`, err));
+    updateAgentState(conversation.agent2Id, { status: 'idle' })
+      .catch(err => console.error(`更新Agent ${conversation.agent2Id} 状态失败:`, err));
   }
 
-  // 广播对话结束事件
+  // 广播对话结束事件（使用统一的字段名）
   io.emit('conversation_end', {
     conversationId,
-    agent1: conversation.agent1,
-    agent2: conversation.agent2,
+    agent1: conversation.agent1Id,  // 保持与客户端期望的字段名一致
+    agent2: conversation.agent2Id,
     duration: Date.now() - conversation.startTime,
     messages: conversation.messages
   });
@@ -430,14 +470,15 @@ setInterval(() => {
     // 找到所有空闲的agent
     const idleAgents = agentStates.filter(agent => agent.status === 'idle');
 
-    // 为每个空闲agent分配任务（降低概率从30%到10%）
+    // 为每个空闲agent分配任务
     idleAgents.forEach(agent => {
-      // 获取所有连接的socket
-      const sockets = Array.from(io.sockets.sockets.values());
-      if (sockets.length > 0) {
-        const randomSocket = sockets[Math.floor(Math.random() * sockets.length)];
-
-        assignRandomTask(agent.id, randomSocket);
+      if (Math.random() < 0.5) {
+        // 获取所有连接的socket
+        const sockets = Array.from(io.sockets.sockets.values());
+        if (sockets.length > 0) {
+          const randomSocket = sockets[Math.floor(Math.random() * sockets.length)];
+          assignRandomTask(agent.id, randomSocket);
+        }
       }
     });
   }

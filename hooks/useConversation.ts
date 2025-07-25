@@ -79,9 +79,17 @@ export const useConversation = () => {
 
   const handleConversationEnd = (
     data: any,
-    setAgents: (updater: (prev: AgentState[]) => AgentState[]) => void
+    setAgents: (updater: (prev: AgentState[]) => AgentState[]) => void,
+    clearConversationState?: (agent1Id: number, agent2Id: number) => void
   ) => {
     const { conversationId, agent1, agent2, messages } = data;
+
+    console.log(`🔚 对话结束: Agent ${agent1} ↔ Agent ${agent2}`);
+
+    // 清除动画系统中的对话状态
+    if (clearConversationState) {
+      clearConversationState(agent1, agent2);
+    }
 
     // 更新agent状态
     setAgents((prev) => {
