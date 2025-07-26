@@ -415,14 +415,13 @@ export default function TownMap() {
   const handleAgentDragStart = (agentId: number) => {
     const agent = agents.find((a) => a.id === agentId);
     console.log(`📄 开始拖拽 Agent ${agentId}, 当前状态: ${agent?.status}`);
-    setDraggingAgentId(agentId);
-
-    // 如果agent正在行走，发送信号中断行走动画和服务器任务
+    
+    // 如果agent正在行走，立即中断行走动画和服务器任务
     if (agent?.status === "walking") {
       console.log(`⏹️ 中断 Agent ${agentId} 的行走动画和服务器任务`);
 
-      // 立即停止本地动画
-      stopAgentAnimation(agentId);
+      // 立即停止本地动画 - 传入false以保持当前位置但不更新为idle（拖拽会接管状态）
+      stopAgentAnimation(agentId, false);
 
       // 通知服务器停止任务
       if (socket) {
@@ -430,18 +429,42 @@ export default function TownMap() {
       }
     }
 
+    setDraggingAgentId(agentId);
+
     // 清除之前的节流定时器
     if (dragThrottleRef.current[agentId]) {
       clearTimeout(dragThrottleRef.current[agentId]!);
       dragThrottleRef.current[agentId] = null;
     }
 
-    // 通知服务器拖拽开始
+    // 获取当前实际位置（可能来自动画）
+    const agentCircle = agentCirclesRef.current[agentId];
+    const currentPosition = agentCircle ? 
+      { x: agentCircle.x(), y: agentCircle.y() } : 
+      agent?.position || { x: 0, y: 0 };
+
+    // 立即更新agent状态为idle并同步位置
+    setAgents((prev) =>
+      prev.map((a) =>
+        a.id === agentId
+          ? {
+              ...a,
+              position: currentPosition,
+              status: "idle" as const,
+              target: null,
+              walkStartTime: undefined,
+              walkDuration: undefined,
+            }
+          : a
+      )
+    );
+
+    // 通知服务器拖拽开始状态
     if (socket) {
       socket.emit("agentUpdate", {
         agentId,
-        status: "idle", // 拖拽中也是空闲状态，只是位置在改变
-        position: agents.find((a) => a.id === agentId)?.position,
+        status: "idle",
+        position: currentPosition,
       });
     }
   };

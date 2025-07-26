@@ -32,6 +32,14 @@ export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallb
   const stopAgentAnimation = (agentId: number, updateToIdle: boolean = true) => {
     if (animationsRef.current[agentId]) {
       console.log(`⏹️ 停止 Agent ${agentId} 的动画 ${updateToIdle ? '(设为idle)' : '(保持当前状态)'}`);
+      
+      // 获取当前动画位置并同步到agent状态
+      const agentCircle = refs.agentCirclesRef.current[agentId];
+      const currentPosition = agentCircle ? 
+        { x: agentCircle.x(), y: agentCircle.y() } : 
+        null;
+      
+      // 停止动画
       animationsRef.current[agentId].stop();
       delete animationsRef.current[agentId];
       
@@ -42,6 +50,7 @@ export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallb
             agent.id === agentId
               ? {
                   ...agent,
+                  position: currentPosition || agent.position, // 使用当前动画位置
                   status: "idle" as const,
                   target: null,
                   walkStartTime: undefined,
@@ -57,6 +66,7 @@ export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallb
             agent.id === agentId
               ? {
                   ...agent,
+                  position: currentPosition || agent.position, // 使用当前动画位置
                   target: null,
                   walkStartTime: undefined,
                   walkDuration: undefined,
