@@ -20,7 +20,7 @@ export async function GET() {
 // 创建新agent
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, backstory, goals, bg, avatarUrl } = await request.json();
+    const { name, email, bg, tags, chatbot_history, avatarUrl } = await request.json();
 
     if (!name) {
       return NextResponse.json(
@@ -32,9 +32,9 @@ export async function POST(request: NextRequest) {
     const newAgent = await db.insert(agents).values({
       name,
       email,
-      backstory,
-      goals,
       bg,
+      tags: tags || [],
+      chatbot_history: chatbot_history || [],
       avatarUrl,
     }).returning();
 

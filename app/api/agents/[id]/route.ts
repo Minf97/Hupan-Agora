@@ -52,15 +52,15 @@ export async function PUT(
       );
     }
 
-    const { name, email, backstory, goals, bg, avatarUrl } = await request.json();
+    const { name, email, bg, tags, chatbot_history, avatarUrl } = await request.json();
 
     const updatedAgent = await db.update(agents)
       .set({
         name,
         email,
-        backstory,
-        goals,
         bg,
+        tags: tags || [],
+        chatbot_history: chatbot_history || [],
         avatarUrl,
         updatedAt: new Date()
       })

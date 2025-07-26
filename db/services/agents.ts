@@ -60,9 +60,9 @@ export async function updateAgentState(agentId: number, updates: {
 export async function createAgent(agentData: {
   name: string;
   email?: string;
-  backstory?: string;
-  goals?: string;
   bg?: string;
+  tags?: string[];
+  chatbot_history?: any[];
   avatarUrl?: string;
   x?: number;
   y?: number;
@@ -74,6 +74,8 @@ export async function createAgent(agentData: {
       .insert(agents)
       .values({
         ...agentData,
+        tags: agentData.tags || [],
+        chatbot_history: agentData.chatbot_history || [],
         x: agentData.x?.toString() || '5',
         y: agentData.y?.toString() || '5',
         color: agentData.color || '#FF5733',

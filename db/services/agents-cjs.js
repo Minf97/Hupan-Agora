@@ -2,7 +2,7 @@
 const { config } = require('dotenv');
 const { drizzle } = require('drizzle-orm/postgres-js');
 const postgres = require('postgres');
-const { pgTable, serial, text, timestamp, varchar, decimal } = require('drizzle-orm/pg-core');
+const { pgTable, serial, text, timestamp, varchar, decimal, json } = require('drizzle-orm/pg-core');
 const { eq } = require('drizzle-orm');
 
 config({ path: '.env.local' });
@@ -15,9 +15,9 @@ const agents = pgTable('agents', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
   email: varchar('email', { length: 255 }),
-  backstory: text('backstory'),
-  goals: text('goals'),
   bg: text('bg'),
+  tags: json('tags').default([]),
+  chatbot_history: json('chatbot_history').default([]),
   avatarUrl: text('avatar_url'),
   x: decimal('x', { precision: 10, scale: 2 }).default('5'),
   y: decimal('y', { precision: 10, scale: 2 }).default('5'),

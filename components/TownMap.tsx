@@ -3,26 +3,10 @@
 import { useRef, useEffect, useState } from "react";
 import { Stage, Layer, Rect, Circle, Text, Group, Ring } from "react-konva";
 import Konva from "konva";
-import {
-  MAP_CONFIG,
-  Room,
-  Wall,
-  Door,
-  WallType,
-  RoomType,
-} from "@/lib/map-config";
+import { MAP_CONFIG, Room, WallType } from "@/lib/map-config";
 import { useSocketManager } from "@/hooks/useSocketManager";
-import { ThoughtPanel } from "@/components/ThoughtPanel";
-import { MemoryPanel } from "@/components/MemoryPanel";
-import { AgentInfoPanel } from "@/components/AgentInfoPanel";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
+import { activityLogService, ActivityLogWithId } from "@/lib/activity-logs";
+import AgentDetailSidebar from "@/components/AgentDetailSidebar";
 
 // 导入 ThoughtRecord 类型
 interface ThoughtRecord {
@@ -30,13 +14,30 @@ interface ThoughtRecord {
   timestamp: number;
   agentId: number;
   agentName: string;
-  type: 'inner_thought' | 'decision' | 'conversation';
+  type: "inner_thought" | "decision" | "conversation";
   content: string;
   metadata?: {
     confidence?: number;
     reasoning?: string;
     shouldInitiateChat?: boolean;
     emotion?: string;
+    conversationId?: string;
+  };
+}
+
+// 日志记录类型（保持向后兼容）
+interface LogEntry {
+  id: string;
+  timestamp: number;
+  type: "status_change" | "conversation_start" | "conversation_message" | "conversation_end";
+  agentId: number;
+  agentName: string;
+  content: string;
+  metadata?: {
+    fromStatus?: string;
+    toStatus?: string;
+    targetAgentId?: number;
+    targetAgentName?: string;
     conversationId?: string;
   };
 }
@@ -49,8 +50,15 @@ interface ConversationRippleProps {
   layer?: Konva.Layer | null;
 }
 
-const ConversationRipple: React.FC<ConversationRippleProps> = ({ x, y, isVisible, layer }) => {
-  const [ripples, setRipples] = useState<Array<{ id: string; radius: number; opacity: number }>>([]);
+const ConversationRipple: React.FC<ConversationRippleProps> = ({
+  x,
+  y,
+  isVisible,
+  layer,
+}) => {
+  const [ripples, setRipples] = useState<
+    Array<{ id: string; radius: number; opacity: number }>
+  >([]);
   const animationRef = useRef<Konva.Animation | null>(null);
   const rippleIdCounter = useRef(0);
 
@@ -72,20 +80,22 @@ const ConversationRipple: React.FC<ConversationRippleProps> = ({ x, y, isVisible
         radius: 15,
         opacity: 0.6,
       };
-      
-      setRipples(prev => [...prev, newRipple]);
+
+      setRipples((prev) => [...prev, newRipple]);
     };
 
     // 启动动画
     const animation = new Konva.Animation((frame) => {
       if (!frame) return;
 
-      setRipples(prev => {
-        return prev.map(ripple => ({
-          ...ripple,
-          radius: ripple.radius + 0.8, // 波纹扩散速度
-          opacity: Math.max(0, ripple.opacity - 0.008), // 透明度衰减
-        })).filter(ripple => ripple.opacity > 0 && ripple.radius < 40); // 移除完全透明或过大的波纹
+      setRipples((prev) => {
+        return prev
+          .map((ripple) => ({
+            ...ripple,
+            radius: ripple.radius + 0.8, // 波纹扩散速度
+            opacity: Math.max(0, ripple.opacity - 0.008), // 透明度衰减
+          }))
+          .filter((ripple) => ripple.opacity > 0 && ripple.radius < 40); // 移除完全透明或过大的波纹
       });
     }, layer);
 
@@ -94,7 +104,7 @@ const ConversationRipple: React.FC<ConversationRippleProps> = ({ x, y, isVisible
 
     // 定期创建新波纹
     const rippleInterval = setInterval(createNewRipple, 800);
-    
+
     // 立即创建第一个波纹
     createNewRipple();
 
@@ -110,7 +120,7 @@ const ConversationRipple: React.FC<ConversationRippleProps> = ({ x, y, isVisible
 
   return (
     <>
-      {ripples.map(ripple => (
+      {ripples.map((ripple) => (
         <Ring
           key={ripple.id}
           x={x}
@@ -132,17 +142,63 @@ export default function TownMap() {
   const layerRef = useRef<Konva.Layer | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [draggingAgentId, setDraggingAgentId] = useState<number | null>(null);
-  const [selectedConversation, setSelectedConversation] = useState<
-    string | null
-  >(null);
-  
+
   // 添加 thoughts 状态
   const [recentThoughts, setRecentThoughts] = useState<ThoughtRecord[]>([]);
   const [isLoadingThoughts, setIsLoadingThoughts] = useState(false);
+  
+  // 日志状态管理
+  const [logs, setLogs] = useState<ActivityLogWithId[]>([]);
+  
+  // 从数据库加载日志
+  const loadLogs = async () => {
+    try {
+      const dbLogs = await activityLogService.getLogs({ limit: 100 });
+      setLogs(dbLogs);
+    } catch (error) {
+      console.error('加载日志失败:', error);
+    }
+  };
 
-  // 地图缩放和平移状态
+  // 添加日志记录函数（现在保存到数据库）
+  const addLog = async (entry: {
+    type: 'conversation_start' | 'conversation_end';
+    agentId: number;
+    agentName: string;
+    content: string;
+    targetAgentId?: number;
+    targetAgentName?: string;
+    conversationId?: string;
+  }) => {
+    try {
+      const newLog = await activityLogService.createLog({
+        type: entry.type,
+        agentId: entry.agentId,
+        agentName: entry.agentName,
+        content: entry.content,
+        targetAgentId: entry.targetAgentId,
+        targetAgentName: entry.targetAgentName,
+        metadata: entry.conversationId ? { conversationId: entry.conversationId } : undefined,
+      });
+      
+      // 更新本地状态，保持最新的100条记录
+      setLogs(prev => [newLog, ...prev].slice(0, 100));
+    } catch (error) {
+      console.error('保存日志失败:', error);
+    }
+  };
+
+  // 组件挂载时加载日志
+  useEffect(() => {
+    loadLogs();
+  }, []);
+
   const [stageScale, setStageScale] = useState(1);
   const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 });
+  const [stageSize, setStageSize] = useState({
+    width: MAP_CONFIG.width,
+    height: MAP_CONFIG.height,
+  });
   const SCALE_BY = 1.02;
   const MIN_SCALE = 0.5;
   const MAX_SCALE = 3;
@@ -161,17 +217,113 @@ export default function TownMap() {
     setAgents,
   } = useSocketManager();
 
+  // 监听agents状态变化并记录日志（只记录交谈相关状态）
+  const prevAgentsRef = useRef<typeof agents>([]);
+  const recordedConversationsRef = useRef<Set<string>>(new Set());
+  
+  useEffect(() => {
+    if (prevAgentsRef.current.length === 0) {
+      prevAgentsRef.current = agents;
+      return;
+    }
+
+    // 处理状态变化的异步函数
+    const handleStatusChanges = async () => {
+      const promises: Promise<void>[] = [];
+
+      agents.forEach(agent => {
+        const prevAgent = prevAgentsRef.current.find(a => a.id === agent.id);
+        if (prevAgent && prevAgent.status !== agent.status) {
+          // 记录进入交谈状态
+          if (agent.status === 'talking' && agent.talkingWith) {
+            const targetAgent = agents.find(a => a.id === agent.talkingWith);
+            const conversationKey = `${Math.min(agent.id, agent.talkingWith)}-${Math.max(agent.id, agent.talkingWith)}`;
+            
+            // 避免重复记录同一个对话
+            if (!recordedConversationsRef.current.has(conversationKey)) {
+              recordedConversationsRef.current.add(conversationKey);
+              promises.push(
+                addLog({
+                  type: "conversation_start",
+                  agentId: agent.id,
+                  agentName: agent.name,
+                  content: `${agent.name} 开始与 ${targetAgent?.name || 'Unknown'} 交谈`,
+                  targetAgentId: agent.talkingWith,
+                  targetAgentName: targetAgent?.name,
+                  conversationId: conversationKey
+                })
+              );
+            }
+          }
+          // 记录退出交谈状态  
+          else if (prevAgent.status === 'talking' && prevAgent.talkingWith) {
+            const targetAgent = agents.find(a => a.id === prevAgent.talkingWith);
+            const conversationKey = `${Math.min(agent.id, prevAgent.talkingWith)}-${Math.max(agent.id, prevAgent.talkingWith)}`;
+            
+            // 移除记录的对话，允许下次重新记录
+            recordedConversationsRef.current.delete(conversationKey);
+            promises.push(
+              addLog({
+                type: "conversation_end",
+                agentId: agent.id,
+                agentName: agent.name,
+                content: `${agent.name} 结束与 ${targetAgent?.name || 'Unknown'} 的交谈`,
+                targetAgentId: prevAgent.talkingWith,
+                targetAgentName: targetAgent?.name,
+                conversationId: conversationKey
+              })
+            );
+          }
+        }
+      });
+
+      // 等待所有日志保存完成
+      if (promises.length > 0) {
+        try {
+          await Promise.all(promises);
+        } catch (error) {
+          console.error('保存日志失败:', error);
+        }
+      }
+    };
+
+    handleStatusChanges();
+    prevAgentsRef.current = agents;
+  }, [agents]);
+
+  // 监听对话事件（移除，避免重复记录）
+  // useEffect(() => {
+  //   Object.entries(activeConversations).forEach(([conversationId, conversation]) => {
+  //     const participants = conversation.participants.map((id: any) => {
+  //       const agent = agents.find(a => a.id === id);
+  //       return agent?.name || `Agent ${id}`;
+  //     }).join(' 和 ');
+      
+  //     addLog({
+  //       type: "conversation_start", 
+  //       agentId: conversation.participants[0],
+  //       agentName: participants,
+  //       content: `${participants} 开始对话`,
+  //       metadata: {
+  //         conversationId,
+  //         targetAgentId: conversation.participants[1],
+  //         targetAgentName: agents.find(a => a.id === conversation.participants[1])?.name
+  //       }
+  //     });
+  //   });
+  // }, [activeConversations, agents]);
+
   // 获取最近的思考记录（包含对话记录）
   const fetchRecentThoughts = async () => {
     setIsLoadingThoughts(true);
     try {
-      const response = await fetch('/api/thoughts?limit=20');
+      const response = await fetch("/api/thoughts?limit=20");
       const result = await response.json();
       if (result.success) {
         setRecentThoughts(result.data);
       }
     } catch (error) {
-      console.error('获取思考记录失败:', error);
+      console.error("获取思考记录失败:", error);
     } finally {
       setIsLoadingThoughts(false);
     }
@@ -185,16 +337,39 @@ export default function TownMap() {
     return () => clearInterval(interval);
   }, []);
 
+  // 监听窗口大小变化，设置全屏地图
+  useEffect(() => {
+    const updateStageSize = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      setStageSize({ width, height });
+    };
+
+    // 初始设置
+    updateStageSize();
+
+    // 监听窗口大小变化
+    window.addEventListener("resize", updateStageSize);
+
+    return () => {
+      window.removeEventListener("resize", updateStageSize);
+    };
+  }, []);
+
   // 从思考记录中过滤出对话记录
-  const conversationThoughts = recentThoughts.filter(thought => thought.type === 'conversation');
-  
-  // 为了兼容 AgentInfoPanel，将 ThoughtRecord 转换为旧的 conversationMessages 格式
-  const compatibleConversationMessages = conversationThoughts.map(thought => ({
-    speaker: thought.agentName,
-    content: thought.content,
-    timestamp: thought.timestamp,
-    emotion: thought.metadata?.emotion
-  }));
+  const conversationThoughts = recentThoughts.filter(
+    (thought) => thought.type === "conversation"
+  );
+
+  // 移除不再需要的兼容代码
+  // const compatibleConversationMessages = conversationThoughts.map(
+  //   (thought) => ({
+  //     speaker: thought.agentName,
+  //     content: thought.content,
+  //     timestamp: thought.timestamp,
+  //     emotion: thought.metadata?.emotion,
+  //   })
+  // );
 
   // 处理代理点击事件
   const handleAgentClick = (agentId: number) => {
@@ -254,8 +429,8 @@ export default function TownMap() {
 
     const newScale = Math.min(MAX_SCALE, stageScale * 1.2);
     const center = {
-      x: MAP_CONFIG.width / 2,
-      y: MAP_CONFIG.height / 2,
+      x: stageSize.width / 2,
+      y: stageSize.height / 2,
     };
 
     const newPos = {
@@ -281,8 +456,8 @@ export default function TownMap() {
 
     const newScale = Math.max(MIN_SCALE, stageScale / 1.2);
     const center = {
-      x: MAP_CONFIG.width / 2,
-      y: MAP_CONFIG.height / 2,
+      x: stageSize.width / 2,
+      y: stageSize.height / 2,
     };
 
     const newPos = {
@@ -345,19 +520,6 @@ export default function TownMap() {
     return (inLegacyObstacle || inWall) && !inDoor;
   };
 
-  // Get room at position
-  const getRoomAtPosition = (x: number, y: number): Room | null => {
-    return (
-      MAP_CONFIG.rooms.find(
-        (room) =>
-          x >= room.x &&
-          x <= room.x + room.width &&
-          y >= room.y &&
-          y <= room.y + room.height
-      ) || null
-    );
-  };
-
   // 检查位置是否在地图边界内
   const isPointInBounds = (x: number, y: number): boolean => {
     const margin = 15; // 给agent留一些边距
@@ -415,7 +577,7 @@ export default function TownMap() {
   const handleAgentDragStart = (agentId: number) => {
     const agent = agents.find((a) => a.id === agentId);
     console.log(`📄 开始拖拽 Agent ${agentId}, 当前状态: ${agent?.status}`);
-    
+
     // 如果agent正在行走，立即中断行走动画和服务器任务
     if (agent?.status === "walking") {
       console.log(`⏹️ 中断 Agent ${agentId} 的行走动画和服务器任务`);
@@ -439,9 +601,9 @@ export default function TownMap() {
 
     // 获取当前实际位置（可能来自动画）
     const agentCircle = agentCirclesRef.current[agentId];
-    const currentPosition = agentCircle ? 
-      { x: agentCircle.x(), y: agentCircle.y() } : 
-      agent?.position || { x: 0, y: 0 };
+    const currentPosition = agentCircle
+      ? { x: agentCircle.x(), y: agentCircle.y() }
+      : agent?.position || { x: 0, y: 0 };
 
     // 立即更新agent状态为idle并同步位置
     setAgents((prev) =>
@@ -560,31 +722,18 @@ export default function TownMap() {
   }, []);
 
   return (
-    <div className={`relative rounded-lg overflow-hidden border transition-all duration-200 ${selectedConversation ? 'mr-80' : ''}`}>
-      {/* 连接状态显示 */}
-      <div className="absolute top-2 left-2 bg-card p-2 rounded-md shadow-sm z-10">
-        <div
-          className={`text-xs ${
-            connectionStatus === "已连接" ? "text-green-500" : "text-amber-500"
-          }`}
-        >
-          {connectionStatus}
-        </div>
-      </div>
+    <div className=" bg-gray-100 w-[100vw]">
 
       {/* 小镇时间显示 */}
-      <div className={`absolute top-2 bg-card p-2 rounded-md shadow-sm z-10 transition-all duration-200 ${selectedConversation ? 'right-[322px]' : 'right-2'}`}>
-        <div className="text-sm font-semibold">
+      <div className="absolute top-4 left-4 bg-card p-2 rounded-md shadow-sm z-10">
+        <div className="text-xs font-medium">
           小镇时间: {townTime.hour.toString().padStart(2, "0")}:
           {townTime.minute.toString().padStart(2, "0")}
-        </div>
-        <div className="text-xs text-muted-foreground">
-          现实时间: {Math.floor(realTimeSeconds / 60)}分{realTimeSeconds % 60}秒
         </div>
       </div>
 
       {/* 活跃对话显示 */}
-      <div className="absolute top-14 left-2 bg-card p-2 rounded-md shadow-sm z-10 max-w-[200px]">
+      <div className="absolute top-16 left-4 bg-card p-2 rounded-md shadow-sm z-10 max-w-[200px]">
         <div className="text-xs font-medium text-yellow-800">
           进行中的对话: {activeConversations.size}
         </div>
@@ -597,65 +746,39 @@ export default function TownMap() {
         )}
       </div>
 
-      {/* 对话消息面板 */}
-      <div className={`absolute bottom-2 bg-card p-2 rounded-md shadow-sm z-10 max-w-[300px] max-h-[200px] overflow-y-auto transition-all duration-200 ${selectedConversation ? 'right-[322px]' : 'right-2'}`}>
-        {conversationThoughts.slice(-5).map((thought) => (
-          <div key={thought.id} className="text-xs">
-            <span className="font-medium text-blue-600">{thought.agentName}:</span>
-            <span className="ml-1 text-muted-foreground">{thought.content}</span>
+      <div className="flex w-[100vw] gap-[1vw]">
+        <div className="w-[70vw] relative">
+          {/* 缩放控制按钮 */}
+          <div className="absolute top-2 right-0 z-20 flex flex-col space-y-2">
+            <button
+              onClick={zoomIn}
+              className="w-10 h-10 bg-white border border-gray-300 rounded-lg shadow-md hover:bg-gray-50 flex items-center justify-center font-bold text-lg"
+              title="放大"
+            >
+              +
+            </button>
+            <button
+              onClick={zoomOut}
+              className="w-10 h-10 bg-white border border-gray-300 rounded-lg shadow-md hover:bg-gray-50 flex items-center justify-center font-bold text-lg"
+              title="缩小"
+            >
+              −
+            </button>
+            <button
+              onClick={resetZoom}
+              className="w-10 h-10 bg-white border border-gray-300 rounded-lg shadow-md hover:bg-gray-50 flex items-center justify-center text-xs"
+              title="重置缩放"
+            >
+              1:1
+            </button>
+            <div className="bg-white border border-gray-300 rounded-lg shadow-md px-2 py-1 text-xs text-center">
+              {Math.round(stageScale * 100)}%
+            </div>
           </div>
-        ))}
-      </div>
-
-      {/* 思考记录面板 */}
-      <div className="absolute bottom-2 left-2 z-10">
-        <ThoughtPanel
-          thoughts={thoughtLogger.thoughts}
-          onClear={thoughtLogger.clearThoughts}
-          isLoading={thoughtLogger.isLoading}
-          onRefresh={thoughtLogger.refreshThoughts}
-        />
-      </div>
-
-      {/* 记忆面板 */}
-      <div className="absolute bottom-2 left-[22rem] z-10">
-        <MemoryPanel agentId={agents.length > 0 ? agents[0].id : undefined} />
-      </div>
-
-      {/* 缩放控制按钮 */}
-      <div className={`absolute top-4 z-20 flex flex-col space-y-2 transition-all duration-200 ${selectedConversation ? 'right-[400px]' : 'right-[320px]'}`}>
-        <button
-          onClick={zoomIn}
-          className="w-10 h-10 bg-white border border-gray-300 rounded-lg shadow-md hover:bg-gray-50 flex items-center justify-center font-bold text-lg"
-          title="放大"
-        >
-          +
-        </button>
-        <button
-          onClick={zoomOut}
-          className="w-10 h-10 bg-white border border-gray-300 rounded-lg shadow-md hover:bg-gray-50 flex items-center justify-center font-bold text-lg"
-          title="缩小"
-        >
-          −
-        </button>
-        <button
-          onClick={resetZoom}
-          className="w-10 h-10 bg-white border border-gray-300 rounded-lg shadow-md hover:bg-gray-50 flex items-center justify-center text-xs"
-          title="重置缩放"
-        >
-          1:1
-        </button>
-        <div className="bg-white border border-gray-300 rounded-lg shadow-md px-2 py-1 text-xs text-center">
-          {Math.round(stageScale * 100)}%
-        </div>
-      </div>
-
-      {/* 地图画布 */}
-      <div className="flex">
-        <div className="flex-1">
+          {/* 全屏地图画布 */}
           <Stage
-            width={MAP_CONFIG.width}
-            height={MAP_CONFIG.height}
+            width={stageSize.width}
+            height={stageSize.height}
             ref={stageRef}
             scaleX={stageScale}
             scaleY={stageScale}
@@ -665,7 +788,7 @@ export default function TownMap() {
             draggable
             onDragEnd={handleStageDragEnd}
           >
-            <Layer 
+            <Layer
               ref={(node) => {
                 if (node) layerRef.current = node;
               }}
@@ -896,215 +1019,107 @@ export default function TownMap() {
             </Layer>
           </Stage>
         </div>
-        <div className="max-w-[300px] w-auto bg-white border-l border-gray-200 p-4 flex flex-col">
+
+        {/* 侧边栏 */}
+        <div className="w-[29vw] absolute right-0 top-0 bg-white shadow-lg rounded-lg p-4 flex flex-col h-[100vh]">
+          {/* Agents 状态列表 */}
           <div className="mb-4">
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbLink href="/" className="text-sm">
-                    首页
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  <BreadcrumbPage className="text-sm font-medium">
-                    地图事件记录
-                  </BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
+            <h3 className="text-lg font-semibold mb-3 text-gray-800">Agents 状态</h3>
+            <div className="space-y-2 overflow-auto max-h-[200px]">
+              {agents.map(agent => (
+                <div 
+                  key={agent.id}
+                  className={`p-2 rounded-lg border text-sm ${
+                    agent.status === 'talking' 
+                      ? 'bg-green-50 border-green-200' 
+                      : agent.status === 'walking'
+                      ? 'bg-blue-50 border-blue-200'
+                      : agent.status === 'seeking'
+                      ? 'bg-yellow-50 border-yellow-200'
+                      : 'bg-gray-50 border-gray-200'
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center space-x-2">
+                      <div 
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: agent.color }}
+                      />
+                      <span className="font-medium text-gray-700">{agent.name}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        agent.status === 'talking' 
+                          ? 'bg-green-100 text-green-700' 
+                          : agent.status === 'walking'
+                          ? 'bg-blue-100 text-blue-700'
+                          : agent.status === 'seeking'
+                          ? 'bg-yellow-100 text-yellow-700'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {agent.status === 'talking' ? '💬 交谈中' : 
+                         agent.status === 'walking' ? '🚶 行走中' :
+                         agent.status === 'seeking' ? '🔍 寻找中' : '😴 空闲'}
+                      </span>
+                      {agent.talkingWith && (
+                        <span className="text-xs text-gray-500">
+                          与 {agents.find(a => a.id === agent.talkingWith)?.name || 'Unknown'} 
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-3">
-            {/* 活跃对话 */}
-            {activeConversations && activeConversations.size > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-medium text-blue-600">
-                  正在进行的对话
-                </h3>
-                {Array.from(activeConversations.entries()).map(
-                  ([conversationId, conversation]) => (
-                    <div
-                      key={conversationId}
-                      className="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-400 cursor-pointer hover:bg-blue-100 transition-colors"
-                      onClick={() => setSelectedConversation(conversationId)}
-                    >
-                      <div className="text-sm font-medium text-blue-800 hover:underline">
-                        {conversation.agent1Name} 和 {conversation.agent2Name}{" "}
-                        开始了交谈
-                      </div>
-                      <div className="text-xs text-blue-600 mt-1">
-                        {new Date(conversation.startTime).toLocaleTimeString()}
-                      </div>
-                    </div>
-                  )
-                )}
-              </div>
-            )}
-
-            {/* 最近活动 - 从 thoughts 系统获取对话记录 */}
-            {conversationThoughts && conversationThoughts.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-medium text-gray-600">最近对话</h3>
-                <div className="space-y-1 max-h-40 overflow-y-auto">
-                  {conversationThoughts.slice(-5).map((thought, index) => (
-                    <div
-                      key={thought.id}
-                      className="text-xs text-gray-500 p-2 bg-gray-50 rounded"
-                    >
-                      <div className="flex items-center gap-1">
-                        <span className="font-medium">{thought.agentName}</span>
-                        <span className="text-green-600">💬</span>
-                      </div>
-                      <div className="text-gray-700 mt-1 text-xs line-clamp-2">
-                        {thought.content}
-                      </div>
-                      <div className="text-gray-400 mt-1">
-                        {new Date(thought.timestamp).toLocaleTimeString()}
-                      </div>
-                    </div>
-                  ))}
+          {/* 实时日志 */}
+          <div className="flex-1 flex flex-col min-h-0">
+            <h3 className="text-lg font-semibold mb-3 text-gray-800">实时日志</h3>
+            <div className="flex-1 overflow-y-auto space-y-2">
+              {logs.length === 0 ? (
+                <div className="text-sm text-gray-500 text-center py-8">
+                  暂无日志记录...
                 </div>
-              </div>
-            )}
-
-            {/* 代理人状态 */}
-            {agents && agents.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-medium text-green-600">
-                  代理人状态
-                </h3>
-                <div className="space-y-1">
-                  {agents.map((agent) => (
-                    <div
-                      key={agent.id}
-                      className="flex items-center justify-between text-sm"
-                    >
-                      <span className="flex items-center">
-                        <div
-                          className="w-3 h-3 rounded-full mr-2"
-                          style={{ backgroundColor: agent.color }}
-                        ></div>
-                        {agent.name}
+              ) : (
+                logs.map(log => (
+                  <div 
+                    key={log.id} 
+                    className={`p-3 rounded-lg border-l-4 text-sm ${
+                      log.type === 'conversation_start'
+                      ? 'bg-green-50 border-green-400'
+                      : log.type === 'conversation_end'
+                      ? 'bg-red-50 border-red-400'
+                      : log.type === 'conversation_message'
+                      ? 'bg-yellow-50 border-yellow-400'
+                      : 'bg-gray-50 border-gray-400'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="font-medium text-gray-700">
+                        {log.agentName}
                       </span>
-                      <span
-                        className="text-xs px-2 py-1 rounded-full"
-                        style={{
-                          backgroundColor:
-                            agent.status === "talking"
-                              ? "#fef3c7"
-                              : agent.status === "walking"
-                              ? "#dbeafe"
-                              : "#f3f4f6",
-                          color:
-                            agent.status === "talking"
-                              ? "#92400e"
-                              : agent.status === "walking"
-                              ? "#1e40af"
-                              : "#374151",
-                        }}
-                      >
-                        {agent.status === "talking"
-                          ? "💬 对话中"
-                          : agent.status === "walking"
-                          ? "🚶 移动中"
-                          : "😴 空闲"}
+                      <span className="text-xs text-gray-500">
+                        {new Date(log.createdAt).toLocaleTimeString()}
                       </span>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* 空状态 */}
-            {(!activeConversations || activeConversations.size === 0) &&
-              (!conversationThoughts || conversationThoughts.length === 0) && (
-                <div className="text-center text-gray-400 py-8">
-                  <div className="text-2xl mb-2">🏘️</div>
-                  <div className="text-sm">暂无活动事件</div>
-                </div>
+                    <div className="text-gray-600">
+                      {log.content}
+                    </div>
+                  </div>
+                ))
               )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* 对话详情面板 - 在右侧栏显示 */}
-      {selectedConversation && (
-        <div className="absolute top-0 right-0 w-80 h-full bg-white border-l border-gray-200 shadow-lg z-40 flex flex-col animate-in slide-in-from-right duration-200">
-          <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-blue-50">
-            <h2 className="text-lg font-semibold text-blue-800">对话详情</h2>
-            <button
-              onClick={() => setSelectedConversation(null)}
-              className="text-blue-400 hover:text-blue-600 text-xl font-bold"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4">
-            {(() => {
-              const conversation =
-                activeConversations.get(selectedConversation);
-              const conversationMessages = conversationThoughts.filter(
-                (thought) => thought.metadata?.conversationId === selectedConversation
-              );
-
-              return (
-                <div className="space-y-4">
-                  {conversation && (
-                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                      <div className="font-medium text-blue-800">
-                        {conversation.agent1Name} 与 {conversation.agent2Name}
-                      </div>
-                      <div className="text-sm text-blue-600 mt-1">
-                        开始时间:{" "}
-                        {new Date(conversation.startTime).toLocaleString()}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="space-y-3">
-                    {conversationMessages.length > 0 ? (
-                      conversationMessages.map((thought) => (
-                        <div
-                          key={thought.id}
-                          className="bg-gray-50 p-3 rounded-lg border border-gray-200"
-                        >
-                          <div className="font-medium text-gray-800 mb-1 flex items-center">
-                            <span className="text-blue-600 mr-2">💬</span>
-                            {thought.agentName}
-                          </div>
-                          <div className="text-gray-700 text-sm leading-relaxed">
-                            {thought.content}
-                          </div>
-                          <div className="text-xs text-gray-400 mt-2">
-                            {new Date(thought.timestamp).toLocaleString()}
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-center text-gray-400 py-8">
-                        <div className="text-2xl mb-2">💬</div>
-                        <div className="text-sm">暂无对话记录</div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          对话正在进行中，请稍候...
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      )}
-
-      {/* 代理信息面板 */}
+      {/* Agent详情右侧栏 */}
       {selectedAgentId && (
-        <AgentInfoPanel
+        <AgentDetailSidebar
           agentId={selectedAgentId}
           onClose={handleCloseAgentInfo}
-          activeConversations={activeConversations}
-          conversationMessages={compatibleConversationMessages}
+          agents={agents}
         />
       )}
     </div>

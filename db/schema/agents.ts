@@ -1,12 +1,12 @@
-import { pgTable, serial, text, timestamp, varchar, decimal } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, varchar, decimal, json } from "drizzle-orm/pg-core";
 
 export const agents = pgTable('agents', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
   email: varchar('email', { length: 255 }),
-  backstory: text('backstory'),
-  goals: text('goals'),
   bg: text('bg'),
+  tags: json('tags').$type<string[]>().default([]),
+  chatbot_history: json('chatbot_history').$type<any[]>().default([]),
   avatarUrl: text('avatar_url'),
   // Socket specific fields
   x: decimal('x', { precision: 10, scale: 2 }).default('5'),
