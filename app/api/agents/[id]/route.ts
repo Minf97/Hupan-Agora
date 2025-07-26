@@ -52,7 +52,7 @@ export async function PUT(
       );
     }
 
-    const { name, description, personality, backstory, goals, avatarUrl } = await request.json();
+    const { name, description, personality, backstory, goals, bg, avatarUrl } = await request.json();
 
     const updatedAgent = await db.update(agents)
       .set({
@@ -61,6 +61,7 @@ export async function PUT(
         personality,
         backstory,
         goals,
+        bg,
         avatarUrl,
         updatedAt: new Date()
       })

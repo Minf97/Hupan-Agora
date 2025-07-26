@@ -7,6 +7,7 @@ export const agents = pgTable('agents', {
   personality: text('personality').notNull(),
   backstory: text('backstory'),
   goals: text('goals'),
+  bg: text('bg'),
   avatarUrl: text('avatar_url'),
   // Socket specific fields
   x: decimal('x', { precision: 10, scale: 2 }).default('5'),

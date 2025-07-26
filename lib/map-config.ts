@@ -280,7 +280,7 @@ export interface AgentState {
   // 沉淀的知识
   // memory: string;
   // 用户背景
-  // bg: string;
+  bg?: string;
   talkingWith?: number; // 正在与哪个agent交谈
 }
 

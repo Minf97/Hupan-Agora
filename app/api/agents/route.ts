@@ -20,7 +20,7 @@ export async function GET() {
 // 创建新agent
 export async function POST(request: NextRequest) {
   try {
-    const { name, description, personality, backstory, goals, avatarUrl } = await request.json();
+    const { name, description, personality, backstory, goals, bg, avatarUrl } = await request.json();
 
     if (!name || !personality) {
       return NextResponse.json(
@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
       personality,
       backstory,
       goals,
+      bg,
       avatarUrl,
     }).returning();
 

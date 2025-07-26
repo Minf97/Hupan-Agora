@@ -63,6 +63,7 @@ export async function createAgent(agentData: {
   description?: string;
   backstory?: string;
   goals?: string;
+  bg?: string;
   avatarUrl?: string;
   x?: number;
   y?: number;
