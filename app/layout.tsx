@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "斯坦福小镇",
-  description: "一个基于multi-agent的数字小镇",
+  title: "Agora",
+  description: "一个思想之间可以相遇、碰撞、重组的容器网络",
 };
 
 export default function RootLayout({
