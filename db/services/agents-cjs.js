@@ -14,10 +14,10 @@ const db = drizzle({ client });
 const agents = pgTable('agents', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
-  description: text('description'),
-  personality: text('personality').notNull(),
+  email: varchar('email', { length: 255 }),
   backstory: text('backstory'),
   goals: text('goals'),
+  bg: text('bg'),
   avatarUrl: text('avatar_url'),
   x: decimal('x', { precision: 10, scale: 2 }).default('5'),
   y: decimal('y', { precision: 10, scale: 2 }).default('5'),

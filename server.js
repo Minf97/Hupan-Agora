@@ -56,6 +56,9 @@ let townTime = { hour: 8, minute: 0 };
 
 // 从数据库加载agents并重置状态
 async function loadAgentsFromDatabase() {
+  console.log(23333, );
+  
+  
   try {
     console.log('从数据库加载agents...');
     agentStates = await getAllAgents();
@@ -427,8 +430,8 @@ function endConversation(conversationId) {
 
 // 定义地图配置（与前端保持一致）
 const MAP_CONFIG = {
-  width: 800,
-  height: 600,
+  width: 1200,
+  height: 900,
   gridSize: 20,
   obstacles: [
     { x: 100, y: 50, width: 200, height: 100 },

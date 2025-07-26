@@ -1,7 +1,30 @@
 // lib/conversation-manager.ts - 对话状态管理系统
 
-import { AGENT_PERSONALITIES, AgentMemory, getAgentPersonality } from './agent-personality';
-import { getAIService, ConversationMessage, ConversationResponse } from './ai-service';
+import { getAIService, ConversationMessage, ConversationResponse, SimpleAgent } from './ai-service';
+
+// 辅助函数：从数据库获取SimpleAgent信息
+async function getSimpleAgent(agentId: number): Promise<SimpleAgent> {
+  try {
+    const response = await fetch(`/api/agents/${agentId}`);
+    if (response.ok) {
+      const agent = await response.json();
+      return {
+        id: agent.id,
+        name: agent.name,
+        bg: agent.bg
+      };
+    }
+  } catch (error) {
+    console.error(`获取Agent ${agentId} 信息失败:`, error);
+  }
+  
+  // 降级处理：返回默认信息
+  return {
+    id: agentId,
+    name: `Agent ${agentId}`,
+    bg: '一个普通的数字人'
+  };
+}
 
 export interface ActiveConversation {
   id: string;
@@ -55,16 +78,14 @@ class ConversationManager {
         options.location
       );
       
-      if (openingMessage) {
+      if (openingMessage && openingMessage.chat) {
+        const initiatorAgent = await getSimpleAgent(options.initiator);
         conversation.messages.push({
-          speaker: AGENT_PERSONALITIES[options.initiator]?.name || `Agent ${options.initiator}`,
-          content: openingMessage.message,
+          speaker: initiatorAgent.name,
+          content: openingMessage.chat,
           timestamp: now,
           emotion: openingMessage.emotion,
         });
-        
-        // 存储记忆
-        this.storeConversationMemories(options.initiator, openingMessage.memories_to_store);
       }
     }
 
@@ -82,7 +103,7 @@ class ConversationManager {
     }
 
     // 确定下一个发言者
-    const nextSpeaker = this.getNextSpeaker(conversation);
+    const nextSpeaker = await this.getNextSpeaker(conversation);
     if (nextSpeaker === -1) {
       await this.endConversation(conversationId, 'natural');
       return null;
@@ -91,9 +112,16 @@ class ConversationManager {
     try {
       const response = await this.generateConversationResponse(conversation, nextSpeaker);
       
+      // 如果agent不想说话，结束对话
+      if (!response.chat) {
+        await this.endConversation(conversationId, 'natural');
+        return null;
+      }
+      
+      const nextSpeakerAgent = await getSimpleAgent(nextSpeaker);
       const message: ConversationMessage = {
-        speaker: AGENT_PERSONALITIES[nextSpeaker]?.name || `Agent ${nextSpeaker}`,
-        content: response.message,
+        speaker: nextSpeakerAgent.name,
+        content: response.chat,
         timestamp: Date.now(),
         emotion: response.emotion,
       };
@@ -102,16 +130,9 @@ class ConversationManager {
       conversation.messages.push(message);
       conversation.currentTurn++;
       conversation.lastActivity = Date.now();
-      
-      if (response.topic_shift) {
-        conversation.topic = response.topic_shift;
-      }
-
-      // 存储记忆
-      this.storeConversationMemories(nextSpeaker, response.memories_to_store);
 
       // 检查是否应该结束对话
-      if (!response.shouldContinue || this.shouldEndConversation(conversation)) {
+      if (response.shouldEnd || this.shouldEndConversation(conversation)) {
         await this.endConversation(conversationId, 'natural');
       } else {
         // 重新设置超时
@@ -174,7 +195,7 @@ class ConversationManager {
   ): Promise<ConversationResponse | null> {
     try {
       const aiService = getAIService();
-      const participants = [initiatorId, ...otherParticipants].map(id => getAgentPersonality(id));
+      const participants = await Promise.all([initiatorId, ...otherParticipants].map(id => getSimpleAgent(id)));
       
       if (participants.length === 0) return null;
 
@@ -191,10 +212,11 @@ class ConversationManager {
     } catch (error) {
       console.error('生成开场白失败:', error);
       return {
-        message: '你好！',
-        emotion: 'neutral',
-        shouldContinue: true,
-        memories_to_store: []
+        innerThought: "AI服务不可用，使用默认开场白",
+        chat: '你好！',
+        shouldEnd: false,
+        nextAction: null,
+        emotion: 'neutral'
       };
     }
   }
@@ -204,7 +226,7 @@ class ConversationManager {
     speakerId: number
   ): Promise<ConversationResponse> {
     const aiService = getAIService();
-    const participants = conversation.participants.map(id => getAgentPersonality(id));
+    const participants = await Promise.all(conversation.participants.map(id => getSimpleAgent(id)));
     const speakerIndex = conversation.participants.indexOf(speakerId);
 
     return await aiService.generateConversationResponse({
@@ -220,19 +242,20 @@ class ConversationManager {
     });
   }
 
-  private getNextSpeaker(conversation: ActiveConversation): number {
+  private async getNextSpeaker(conversation: ActiveConversation): Promise<number> {
     // 简单的轮流发言策略
     if (conversation.messages.length === 0) {
       return conversation.participants[0];
     }
 
     const lastSpeakerName = conversation.messages[conversation.messages.length - 1].speaker;
-    let lastSpeakerId: string | undefined;
+    let lastSpeakerId: number | undefined;
     
-    // 查找说话者ID
+    // 查找说话者ID - 需要异步获取每个agent的名称
     for (const id of conversation.participants) {
-      if (getAgentPersonality(id).name === lastSpeakerName) {
-        lastSpeakerId = id.toString();
+      const agent = await getSimpleAgent(id);
+      if (agent.name === lastSpeakerName) {
+        lastSpeakerId = id;
         break;
       }
     }
@@ -241,7 +264,7 @@ class ConversationManager {
       return conversation.participants[0];
     }
 
-    const currentIndex = conversation.participants.indexOf(parseInt(lastSpeakerId));
+    const currentIndex = conversation.participants.indexOf(lastSpeakerId);
     const nextIndex = (currentIndex + 1) % conversation.participants.length;
     
     return conversation.participants[nextIndex];
@@ -287,47 +310,16 @@ class ConversationManager {
     this.conversationTimeouts.set(conversationId, timeout);
   }
 
-  private storeConversationMemories(agentId: number, memories: AgentMemory[]): void {
-    const personality = getAgentPersonality(agentId);
-    personality.memories.push(...memories);
-    
-    // 保持记忆数量在合理范围内
-    if (personality.memories.length > 100) {
-      personality.memories = personality.memories
-        .sort((a, b) => b.importance - a.importance)
-        .slice(0, 50);
-    }
-  }
-
-  private generateConversationSummary(conversation: ActiveConversation, agentId: number): AgentMemory {
-    const otherParticipants = conversation.participants
-      .filter(id => id !== agentId)
-      .map(id => getAgentPersonality(id).name)
-      .join('、');
-
-    const messageCount = conversation.messages.length;
-    const duration = Math.round((Date.now() - conversation.startTime) / 1000);
-
-    return {
-      id: `conv_summary_${conversation.id}_${agentId}`,
-      timestamp: Date.now(),
-      type: 'conversation',
-      content: `与${otherParticipants}在${conversation.location}进行了${duration}秒的对话，共${messageCount}轮`,
-      participants: conversation.participants,
-      importance: 0.6,
-      emotional_impact: 0.1
-    };
-  }
-
-  // 为对话结束后创建记忆到数据库
   private async createConversationMemories(conversation: ActiveConversation): Promise<void> {
     try {
       for (const participantId of conversation.participants) {
         // 生成对话总结
-        const otherParticipants = conversation.participants
-          .filter(id => id !== participantId)
-          .map(id => getAgentPersonality(id).name)
-          .join('、');
+        const otherAgents = await Promise.all(
+          conversation.participants
+            .filter(id => id !== participantId)
+            .map(id => getSimpleAgent(id))
+        );
+        const otherNames = otherAgents.map(agent => agent.name).join('、');
 
         const messageCount = conversation.messages.length;
         const duration = Math.round((Date.now() - conversation.startTime) / 1000);
@@ -337,7 +329,7 @@ class ConversationManager {
           `${msg.speaker}: ${msg.content}`
         ).join('\n');
 
-        const memoryContent = `与${otherParticipants}在${conversation.location}进行了对话（${duration}秒，${messageCount}轮）：\n${conversationContent}`;
+        const memoryContent = `与${otherNames}在${conversation.location}进行了对话（${duration}秒，${messageCount}轮）：\n${conversationContent}`;
 
         // 计算重要性：基于对话长度、持续时间和情绪强度
         let importance = 2; // 基础重要性

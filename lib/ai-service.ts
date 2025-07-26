@@ -1,6 +1,11 @@
 // lib/ai-service.ts - AI服务接口
 
-import { AgentPersonality, AgentMemory } from "./agent-personality";
+// 简化的Agent接口，用于AI对话生成
+export interface SimpleAgent {
+  id: number;
+  name: string;
+  bg?: string; // 背景信息，包含性格、兴趣等
+}
 
 export interface AIServiceConfig {
   apiKey: string;
@@ -10,13 +15,11 @@ export interface AIServiceConfig {
 }
 
 export interface InnerThoughtRequest {
-  agent: AgentPersonality;
-  encounteredAgent: AgentPersonality;
+  agent: SimpleAgent;
+  encounteredAgent: SimpleAgent;
   context: {
     location: string;
     timeOfDay: number;
-    recentMemories: AgentMemory[];
-    lastInteraction?: number;
   };
 }
 
@@ -29,7 +32,7 @@ export interface InnerThoughtResponse {
 }
 
 export interface ConversationRequest {
-  participants: AgentPersonality[];
+  participants: SimpleAgent[];
   conversationHistory: ConversationMessage[];
   context: {
     location: string;
@@ -48,11 +51,11 @@ export interface ConversationMessage {
 }
 
 export interface ConversationResponse {
-  message: string;
-  emotion: string;
-  shouldContinue: boolean; // 是否应该继续对话
-  topic_shift?: string; // 话题转换
-  memories_to_store: AgentMemory[]; // 需要存储的记忆
+  innerThought: string; // 内心想法
+  chat: string | null; // 对话内容，null表示不想说话
+  shouldEnd: boolean; // 是否结束对话
+  nextAction: "working" | "searching" | null; // 下一步行动
+  emotion: string; // 当前情绪
 }
 
 class AIService {
@@ -96,46 +99,26 @@ class AIService {
     const { agent, encounteredAgent, context } = request;
 
     return `
-你是 ${agent.name}，一个${agent.age}岁的${agent.occupation}。
+你是 ${agent.name}。
 
-你的背景：${agent.background}
+你的背景信息：${agent.bg || '一个普通的数字人'}
 
-你的性格特征：
-- 外向性: ${agent.traits.extraversion}/1.0
-- 宜人性: ${agent.traits.agreeableness}/1.0  
-- 尽责性: ${agent.traits.conscientiousness}/1.0
-- 神经质: ${agent.traits.neuroticism}/1.0
-- 开放性: ${agent.traits.openness}/1.0
+你刚刚遇到了 ${encounteredAgent.name}。
+${encounteredAgent.name} 的背景：${encounteredAgent.bg || '一个普通的数字人'}
 
-你的兴趣爱好：${agent.interests.join(", ")}
-当前情绪：${agent.mood}
-当前时间：${context.timeOfDay}点
-
-你刚刚遇到了 ${encounteredAgent.name}（${encounteredAgent.age}岁，${
-      encounteredAgent.occupation
-    }）。
-${encounteredAgent.name} 的背景：${encounteredAgent.background}
-${encounteredAgent.name} 的兴趣：${encounteredAgent.interests.join(", ")}
-
-最近的记忆：
-${context.recentMemories
-  .slice(0, 3)
-  .map((m) => `- ${m.content}`)
-  .join("\n")}
+当前场景：${context.location}，时间 ${context.timeOfDay}点
 
 请以 ${agent.name} 的身份进行内心思考：
 1. 你是否想要主动和 ${encounteredAgent.name} 打招呼或开始对话？
 2. 你的理由是什么？
 3. 此时你的内心独白是什么？
-4. 这次相遇是否会影响你的心情？
 
 请以JSON格式回复：
 {
   "shouldInitiateChat": boolean,
   "confidence": number,
   "reasoning": "详细的思考过程",
-  "internal_monologue": "内心独白",
-  "mood_change": "新的情绪状态（如果有变化）"
+  "internal_monologue": "内心独白"
 }
     `;
   }
@@ -145,42 +128,51 @@ ${context.recentMemories
       request;
     const speaker = participants[speakingAgent];
 
-    return `
-你是 ${speaker.name}，正在和${participants
+    const otherParticipants = participants
       .filter((_, i) => i !== speakingAgent)
       .map((p) => p.name)
-      .join("、")}进行对话。
+      .join("、");
 
-你的背景：${speaker.background}
-你的性格：外向性${speaker.traits.extraversion}/1.0, 宜人性${
-      speaker.traits.agreeableness
-    }/1.0
-你的对话风格：正式程度${speaker.conversationStyle.formality}/1.0, 话多程度${
-      speaker.conversationStyle.verbosity
-    }/1.0, 友好程度${speaker.conversationStyle.friendliness}/1.0
+    return `
+你是一个Agent，现在你遇到了另一个Agent。
 
-对话场景：${context.location}，${context.timeOfDay}点
+请进行以下判断与生成：
 
-对话历史：
-${conversationHistory.map((msg) => `${msg.speaker}: ${msg.content}`).join("\n")}
+1. 判断你是否愿意继续和对方对话，并在 **内心OS** 字段中写出你内心的想法。  
+2. 如果你决定对话，请根据你的身份、背景、记忆与历史聊天记录，生成你要对对方说的内容，写入 **chat** 字段。  
+3. 判断本轮对话是否应该结束，写入 **是否结束** 字段：  
+   - 若你决定继续对话，填写 \`false\`，并将 **next_action** 设置为 \`null\`。  
+   - 若你决定结束对话，填写 \`true\`，并根据情况决定 **next_action**：  
+     - 若无下一步意图，写 \`"working"\`
+     - 若你要去寻找某人，写 \`"searching"\`，并由系统触发搜索流程。
 
-请以 ${speaker.name} 的身份回复，保持你的性格特征和对话风格。
+你的身份信息：
+- **身份**：你是 ${speaker.name}
+- **背景**：${speaker.bg || '一个普通的数字人'}
+- **当前场景**：${context.location}，${context.timeOfDay}点
+- **对话对象**：${otherParticipants}
 
-回复JSON格式：
-{
-  "message": "你的回复内容",
-  "emotion": "当前情绪",
-  "shouldContinue": boolean,
-  "topic_shift": "话题转换（如果有）",
-  "memories_to_store": [
-    {
-      "type": "conversation",
-      "content": "值得记住的对话内容",
-      "importance": 0.7,
-      "emotional_impact": 0.2
-    }
-  ]
+聊天历史：
+${conversationHistory.length > 0 ? 
+  conversationHistory.map((msg) => `${msg.speaker}: ${msg.content}`).join("\n") : 
+  "（首次相遇，暂无聊天历史）"
 }
+
+最终输出格式（必须完全符合）：
+{
+  "innerThought": "（你此刻的内心想法，例如：他看起来友好，我可以聊聊）",
+  "chat": "（你对对方说的话，如果不想说话则为null）",
+  "shouldEnd": false 或 true,
+  "nextAction": "working" 或 "searching" 或 null,
+  "emotion": "当前情绪"
+}
+
+必须遵守以下规则：
+- 输出必须为完整JSON对象，且只包含以上五个键
+- 键名必须完全一致
+- JSON之外不得有任何额外内容
+- 所有生成的自然语言内容需符合你的身份、背景和性格特征
+- 保持你的对话风格和性格特征
     `;
   }
 
@@ -281,11 +273,11 @@ ${conversationHistory.map((msg) => `${msg.speaker}: ${msg.content}`).join("\n")}
     try {
       const parsed = JSON.parse(cleanResponse);
       return {
-        message: parsed.message || "你好！",
+        innerThought: parsed.innerThought || "思考中...",
+        chat: parsed.chat !== undefined ? parsed.chat : "你好！",
+        shouldEnd: parsed.shouldEnd !== undefined ? parsed.shouldEnd : false,
+        nextAction: parsed.nextAction || null,
         emotion: parsed.emotion || "neutral",
-        shouldContinue: parsed.shouldContinue !== false,
-        topic_shift: parsed.topic_shift,
-        memories_to_store: parsed.memories_to_store || [],
       };
     } catch (error) {
       console.error("Failed to parse AI response:", error);
@@ -315,10 +307,11 @@ ${conversationHistory.map((msg) => `${msg.speaker}: ${msg.content}`).join("\n")}
       "很高兴见到你",
     ];
     return {
-      message: responses[Math.floor(Math.random() * responses.length)],
+      innerThought: "AI服务暂时不可用，使用默认回复",
+      chat: responses[Math.floor(Math.random() * responses.length)],
+      shouldEnd: false,
+      nextAction: null,
       emotion: "neutral",
-      shouldContinue: true,
-      memories_to_store: [],
     };
   }
 }

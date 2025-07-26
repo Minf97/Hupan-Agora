@@ -9,10 +9,10 @@ import { ArrowLeft, Trash, Pencil, Brain, MessageCircle, Loader2 } from "lucide-
 interface Agent {
   id: number;
   name: string;
-  description: string;
-  personality: string;
-  backstory: string;
-  goals: string;
+  email?: string;
+  backstory?: string;
+  goals?: string;
+  bg?: string;
   avatarUrl?: string;
   createdAt: string;
 }
@@ -242,9 +242,9 @@ export default function AgentPage() {
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-card rounded-lg p-6 shadow-sm">
             <h2 className="text-xl font-semibold mb-4 flex items-center">
-              <Brain className="h-5 w-5 mr-2" /> 性格特点
+              <Brain className="h-5 w-5 mr-2" /> 背景信息
             </h2>
-            <p className="whitespace-pre-line">{agent.personality}</p>
+            <p className="whitespace-pre-line">{agent.bg || "暂无背景信息"}</p>
           </div>
 
           {agent.backstory && (
@@ -326,8 +326,8 @@ export default function AgentPage() {
             </div>
 
             <div className="mb-6">
-              {agent.description && (
-                <p className="text-muted-foreground">{agent.description}</p>
+              {agent.email && (
+                <p className="text-muted-foreground">{agent.email}</p>
               )}
               <p className="text-sm text-muted-foreground mt-2">
                 创建于 {formatDate(agent.createdAt)}

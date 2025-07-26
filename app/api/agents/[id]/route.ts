@@ -52,13 +52,12 @@ export async function PUT(
       );
     }
 
-    const { name, description, personality, backstory, goals, bg, avatarUrl } = await request.json();
+    const { name, email, backstory, goals, bg, avatarUrl } = await request.json();
 
     const updatedAgent = await db.update(agents)
       .set({
         name,
-        description,
-        personality,
+        email,
         backstory,
         goals,
         bg,

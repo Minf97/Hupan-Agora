@@ -20,19 +20,18 @@ export async function GET() {
 // 创建新agent
 export async function POST(request: NextRequest) {
   try {
-    const { name, description, personality, backstory, goals, bg, avatarUrl } = await request.json();
+    const { name, email, backstory, goals, bg, avatarUrl } = await request.json();
 
-    if (!name || !personality) {
+    if (!name) {
       return NextResponse.json(
-        { error: "名称和性格描述是必需的" },
+        { error: "名称是必需的" },
         { status: 400 }
       );
     }
 
     const newAgent = await db.insert(agents).values({
       name,
-      description,
-      personality,
+      email,
       backstory,
       goals,
       bg,

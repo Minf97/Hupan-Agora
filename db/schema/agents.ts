@@ -3,8 +3,7 @@ import { pgTable, serial, text, timestamp, varchar, decimal } from "drizzle-orm/
 export const agents = pgTable('agents', {
   id: serial('id').primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
-  description: text('description'),
-  personality: text('personality').notNull(),
+  email: varchar('email', { length: 255 }),
   backstory: text('backstory'),
   goals: text('goals'),
   bg: text('bg'),

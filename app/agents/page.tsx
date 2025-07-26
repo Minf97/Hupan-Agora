@@ -75,7 +75,7 @@ function AgentCard({ agent }: { agent: Agent }) {
         <div className="p-4">
           <h3 className="font-semibold text-lg">{agent.name}</h3>
           <p className="text-muted-foreground text-sm line-clamp-2 mt-1">
-            {agent.description || agent.personality.substring(0, 100) + "..."}
+            {agent.bg || "暂无背景信息"}
           </p>
         </div>
       </div>

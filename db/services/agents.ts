@@ -59,8 +59,7 @@ export async function updateAgentState(agentId: number, updates: {
 // 创建新agent（如果需要）
 export async function createAgent(agentData: {
   name: string;
-  personality: string;
-  description?: string;
+  email?: string;
   backstory?: string;
   goals?: string;
   bg?: string;

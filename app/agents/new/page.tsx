@@ -25,9 +25,9 @@ const agentFormSchema = z.object({
   name: z.string().min(2, {
     message: "名字至少需要2个字符",
   }),
-  description: z.string().optional(),
-  personality: z.string().min(10, {
-    message: "性格描述至少需要10个字符",
+  email: z.string().email().optional().or(z.literal("")),
+  bg: z.string().min(10, {
+    message: "背景信息至少需要10个字符",
   }),
   backstory: z.string().optional(),
   goals: z.string().optional(),
@@ -44,8 +44,8 @@ export default function NewAgentPage() {
   // 默认值
   const defaultValues: AgentFormValues = {
     name: "",
-    description: "",
-    personality: "",
+    email: "",
+    bg: "",
     backstory: "",
     goals: "",
     avatarUrl: "",
@@ -108,12 +108,12 @@ export default function NewAgentPage() {
 
             <FormField
               control={form.control}
-              name="description"
+              name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>简介</FormLabel>
+                  <FormLabel>邮箱</FormLabel>
                   <FormControl>
-                    <Input placeholder="简短介绍这个数字人" {...field} />
+                    <Input placeholder="数字人的邮箱地址（可选）" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -122,13 +122,13 @@ export default function NewAgentPage() {
 
             <FormField
               control={form.control}
-              name="personality"
+              name="bg"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>性格特点</FormLabel>
+                  <FormLabel>背景信息</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="详细描述这个数字人的性格、行为方式和说话风格"
+                      placeholder="详细描述这个数字人的背景、性格、行为方式和说话风格"
                       className="h-24"
                       {...field}
                     />
