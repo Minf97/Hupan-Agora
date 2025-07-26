@@ -142,15 +142,20 @@ export async function POST(
   }
 }
 
-// AI回复生成函数 - 使用Moonshot API
+// AI回复生成函数 - 使用PPIO API
 async function generateAgentReply(agentName: string, userMessage: string, agentBackground?: string): Promise<string> {
   try {
-    const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY;
-    const baseUrl = process.env.NEXT_PUBLIC_OPENAI_BASE_URL;
-    const model = process.env.NEXT_PUBLIC_OPENAI_MODEL || 'moonshot-v1-8k';
+    const apiKey = process.env.PPIO_API_KEY || process.env.NEXT_PUBLIC_OPENAI_API_KEY;
+    const baseUrl = process.env.PPIO_BASE_URL || process.env.NEXT_PUBLIC_PPIO_BASE_URL;
+    const model = process.env.PPIO_MODEL || process.env.NEXT_PUBLIC_PPIO_MODEL;
 
-    if (!apiKey || !baseUrl) {
-      console.error('Missing OpenAI API configuration');
+    let u = '';
+    if(baseUrl === process.env.NEXT_PUBLIC_PPIO_BASE_URL) {
+      u = 'v1/'
+    }
+
+    if (!apiKey) {
+      console.error('Missing PPIO API configuration');
       return `${agentName}: 抱歉，我现在无法回复，请稍后再试。`;
     }
 
@@ -158,7 +163,7 @@ async function generateAgentReply(agentName: string, userMessage: string, agentB
     const systemPrompt = `你是${agentName}，一个AI数字人。${agentBackground ? `你的背景是：${agentBackground}` : ''} 
 请以${agentName}的身份回复用户的消息。保持友好、自然的对话风格，并体现你的个性。回复要简洁明了，通常1-3句话即可。`;
 
-    const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    const response = await fetch(`${baseUrl}/${u}chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -176,13 +181,13 @@ async function generateAgentReply(agentName: string, userMessage: string, agentB
             content: userMessage
           }
         ],
-        max_tokens: 150,
+        max_tokens: 512,
         temperature: 0.7,
       }),
     });
 
     if (!response.ok) {
-      console.error('AI API request failed:', response.status, response.statusText);
+      console.error('PPIO API request failed:', response.status, response.statusText);
       return `${agentName}: 抱歉，我现在有点忙，请稍后再试。`;
     }
 
@@ -190,7 +195,7 @@ async function generateAgentReply(agentName: string, userMessage: string, agentB
     const aiReply = data.choices?.[0]?.message?.content;
 
     if (!aiReply) {
-      console.error('No response from AI API');
+      console.error('No response from PPIO API');
       return `${agentName}: 我现在有点困惑，能再说一遍吗？`;
     }
 
