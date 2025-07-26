@@ -102,6 +102,7 @@ export async function retrieveSimilarMemories(
     
     return similarMemories.map(memory => ({
       ...memory,
+      type: memory.type as MemoryRecord['type'],
       similarity: memory.similarity,
     }));
   } catch (error) {

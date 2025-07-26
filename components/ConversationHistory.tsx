@@ -15,6 +15,15 @@ interface ConversationMessage {
   agentId?: number;
 }
 
+interface MemoryRecord {
+  id: number;
+  agentId: number;
+  content: string;
+  type: string;
+  importance: number;
+  createdAt: Date;
+}
+
 interface ConversationHistoryProps {
   agentId: number;
   agentName: string;
@@ -83,6 +92,28 @@ export function ConversationHistory({
   const [selectedTimeRange, setSelectedTimeRange] = useState<'recent' | 'hour' | 'day' | 'all'>('recent');
   const [filteredMessages, setFilteredMessages] = useState<ConversationMessage[]>([]);
   const [currentConversation, setCurrentConversation] = useState<any>(null);
+  const [memoryConversations, setMemoryConversations] = useState<MemoryRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // 从memory系统加载对话记录
+  const loadConversationMemories = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/memories?agentId=${agentId}&type=conversation&limit=50`);
+      if (response.ok) {
+        const memories = await response.json();
+        setMemoryConversations(memories);
+      }
+    } catch (error) {
+      console.error('加载对话记录失败:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadConversationMemories();
+  }, [agentId]);
 
   useEffect(() => {
     // 查找当前对话
@@ -91,7 +122,7 @@ export function ConversationHistory({
     );
     setCurrentConversation(conversation);
 
-    // 过滤消息
+    // 过滤实时消息（保留用于显示当前对话）
     let messages = conversationMessages.filter(msg => 
       msg.speaker === agentName || 
       (conversation && (
@@ -113,7 +144,6 @@ export function ConversationHistory({
         messages = messages.filter(msg => now - msg.timestamp < 24 * 60 * 60 * 1000);
         break;
       case 'all':
-        // 保持所有消息，但限制在最近100条
         messages = messages.slice(-100);
         break;
     }
@@ -214,69 +244,75 @@ export function ConversationHistory({
           {/* 对话历史 */}
           <ScrollArea className="h-[50vh]">
             <div className="space-y-4">
-              {Object.entries(messageGroups).length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>暂无对话记录</p>
-                </div>
-              ) : (
-                Object.entries(messageGroups)
-                  .sort(([a], [b]) => Number(a.split('_')[1]) - Number(b.split('_')[1]))
-                  .map(([groupKey, messages]) => (
-                    <div key={groupKey} className="space-y-2">
-                      {/* 时间分组标题 */}
-                      <div className="flex items-center gap-2 py-2">
-                        <Clock className="h-3 w-3 text-gray-400" />
-                        <span className="text-xs text-gray-500">
-                          {formatTimestamp(messages[0].timestamp)}
+              {/* 当前实时对话 */}
+              {filteredMessages.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium text-green-600 flex items-center gap-2">
+                    <MessageCircle className="h-4 w-4" />
+                    当前对话
+                  </h3>
+                  {filteredMessages.map((msg, index) => (
+                    <div key={index} className="bg-green-50 rounded-lg p-3 border-l-4 border-green-400">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium text-green-800">{msg.speaker}</span>
+                        <span className="text-xs text-green-600">
+                          {formatDetailedTime(msg.timestamp)}
                         </span>
-                        <div className="flex-1 h-px bg-gray-200" />
                       </div>
-                      
-                      {/* 该时间段的消息 */}
-                      {messages.map((msg, index) => (
-                        <div
-                          key={`${groupKey}-${index}`}
-                          className={`p-3 rounded-lg transition-all duration-200 ${
-                            msg.speaker === agentName
-                              ? 'bg-blue-100 ml-8 border-l-4 border-blue-400'
-                              : 'bg-gray-100 mr-8 border-l-4 border-gray-400'
-                          }`}
-                        >
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">
-                                {msg.speaker}
-                              </span>
-                              {msg.emotion && (
-                                <Badge variant="outline" className="text-xs">
-                                  {getEmotionIcon(msg.emotion)} {msg.emotion}
-                                </Badge>
-                              )}
-                            </div>
-                            <span className="text-xs text-gray-500" title={formatDetailedTime(msg.timestamp)}>
-                              {new Date(msg.timestamp).toLocaleTimeString('zh-CN', {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                second: '2-digit'
-                              })}
-                            </span>
-                          </div>
-                          <p className="text-sm leading-relaxed">{msg.content}</p>
+                      <p className="text-gray-700">{msg.content}</p>
+                      {msg.emotion && (
+                        <Badge variant="outline" className="mt-1 text-xs">
+                          {getEmotionIcon(msg.emotion)} {msg.emotion}
+                        </Badge>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* 历史对话记录（从memory系统） */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium text-gray-600 flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  历史对话记录
+                  {loading && <span className="text-xs text-gray-400">(加载中...)</span>}
+                </h3>
+                
+                {memoryConversations.length === 0 && !loading ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>暂无对话记录</p>
+                  </div>
+                ) : (
+                  memoryConversations.map((memory) => (
+                    <div key={memory.id} className="bg-gray-50 rounded-lg p-3 border-l-4 border-gray-400">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium text-gray-800">{agentName}</span>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">
+                            重要性: {memory.importance}
+                          </Badge>
+                          <span className="text-xs text-gray-600">
+                            {formatDetailedTime(new Date(memory.createdAt).getTime())}
+                          </span>
                         </div>
-                      ))}
+                      </div>
+                      <p className="text-gray-700 text-sm">
+                        {memory.content.replace('对话: ', '')}
+                      </p>
                     </div>
                   ))
-              )}
+                )}
+              </div>
             </div>
           </ScrollArea>
 
           {/* 统计信息 */}
           <div className="flex justify-between text-xs text-muted-foreground pt-2 border-t">
-            <span>共 {filteredMessages.length} 条消息</span>
+            <span>当前对话: {filteredMessages.length} 条 | 历史记录: {memoryConversations.length} 条</span>
             <span>
-              {filteredMessages.length > 0 && 
-                `最新消息: ${formatTimestamp(filteredMessages[filteredMessages.length - 1].timestamp)}`
+              {memoryConversations.length > 0 && 
+                `最新记录: ${formatTimestamp(new Date(memoryConversations[0].createdAt).getTime())}`
               }
             </span>
           </div>
