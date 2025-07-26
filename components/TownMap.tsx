@@ -9,6 +9,8 @@ import { activityLogService, ActivityLogWithId } from "@/lib/activity-logs";
 import AgentDetailSidebar from "@/components/AgentDetailSidebar";
 
 // 导入 ThoughtRecord 类型
+import Image from "next/image";
+
 interface ThoughtRecord {
   id: string;
   timestamp: number;
@@ -29,7 +31,11 @@ interface ThoughtRecord {
 interface LogEntry {
   id: string;
   timestamp: number;
-  type: "status_change" | "conversation_start" | "conversation_message" | "conversation_end";
+  type:
+    | "status_change"
+    | "conversation_start"
+    | "conversation_message"
+    | "conversation_end";
   agentId: number;
   agentName: string;
   content: string;
@@ -146,23 +152,23 @@ export default function TownMap() {
   // 添加 thoughts 状态
   const [recentThoughts, setRecentThoughts] = useState<ThoughtRecord[]>([]);
   const [isLoadingThoughts, setIsLoadingThoughts] = useState(false);
-  
+
   // 日志状态管理
   const [logs, setLogs] = useState<ActivityLogWithId[]>([]);
-  
+
   // 从数据库加载日志
   const loadLogs = async () => {
     try {
       const dbLogs = await activityLogService.getLogs({ limit: 100 });
       setLogs(dbLogs);
     } catch (error) {
-      console.error('加载日志失败:', error);
+      console.error("加载日志失败:", error);
     }
   };
 
   // 添加日志记录函数（现在保存到数据库）
   const addLog = async (entry: {
-    type: 'conversation_start' | 'conversation_end';
+    type: "conversation_start" | "conversation_end";
     agentId: number;
     agentName: string;
     content: string;
@@ -178,13 +184,15 @@ export default function TownMap() {
         content: entry.content,
         targetAgentId: entry.targetAgentId,
         targetAgentName: entry.targetAgentName,
-        metadata: entry.conversationId ? { conversationId: entry.conversationId } : undefined,
+        metadata: entry.conversationId
+          ? { conversationId: entry.conversationId }
+          : undefined,
       });
-      
+
       // 更新本地状态，保持最新的100条记录
-      setLogs(prev => [newLog, ...prev].slice(0, 100));
+      setLogs((prev) => [newLog, ...prev].slice(0, 100));
     } catch (error) {
-      console.error('保存日志失败:', error);
+      console.error("保存日志失败:", error);
     }
   };
 
@@ -220,7 +228,7 @@ export default function TownMap() {
   // 监听agents状态变化并记录日志（只记录交谈相关状态）
   const prevAgentsRef = useRef<typeof agents>([]);
   const recordedConversationsRef = useRef<Set<string>>(new Set());
-  
+
   useEffect(() => {
     if (prevAgentsRef.current.length === 0) {
       prevAgentsRef.current = agents;
@@ -231,14 +239,17 @@ export default function TownMap() {
     const handleStatusChanges = async () => {
       const promises: Promise<void>[] = [];
 
-      agents.forEach(agent => {
-        const prevAgent = prevAgentsRef.current.find(a => a.id === agent.id);
+      agents.forEach((agent) => {
+        const prevAgent = prevAgentsRef.current.find((a) => a.id === agent.id);
         if (prevAgent && prevAgent.status !== agent.status) {
           // 记录进入交谈状态
-          if (agent.status === 'talking' && agent.talkingWith) {
-            const targetAgent = agents.find(a => a.id === agent.talkingWith);
-            const conversationKey = `${Math.min(agent.id, agent.talkingWith)}-${Math.max(agent.id, agent.talkingWith)}`;
-            
+          if (agent.status === "talking" && agent.talkingWith) {
+            const targetAgent = agents.find((a) => a.id === agent.talkingWith);
+            const conversationKey = `${Math.min(
+              agent.id,
+              agent.talkingWith
+            )}-${Math.max(agent.id, agent.talkingWith)}`;
+
             // 避免重复记录同一个对话
             if (!recordedConversationsRef.current.has(conversationKey)) {
               recordedConversationsRef.current.add(conversationKey);
@@ -247,19 +258,26 @@ export default function TownMap() {
                   type: "conversation_start",
                   agentId: agent.id,
                   agentName: agent.name,
-                  content: `${agent.name} 开始与 ${targetAgent?.name || 'Unknown'} 交谈`,
+                  content: `${agent.name} 开始与 ${
+                    targetAgent?.name || "Unknown"
+                  } 交谈`,
                   targetAgentId: agent.talkingWith,
                   targetAgentName: targetAgent?.name,
-                  conversationId: conversationKey
+                  conversationId: conversationKey,
                 })
               );
             }
           }
-          // 记录退出交谈状态  
-          else if (prevAgent.status === 'talking' && prevAgent.talkingWith) {
-            const targetAgent = agents.find(a => a.id === prevAgent.talkingWith);
-            const conversationKey = `${Math.min(agent.id, prevAgent.talkingWith)}-${Math.max(agent.id, prevAgent.talkingWith)}`;
-            
+          // 记录退出交谈状态
+          else if (prevAgent.status === "talking" && prevAgent.talkingWith) {
+            const targetAgent = agents.find(
+              (a) => a.id === prevAgent.talkingWith
+            );
+            const conversationKey = `${Math.min(
+              agent.id,
+              prevAgent.talkingWith
+            )}-${Math.max(agent.id, prevAgent.talkingWith)}`;
+
             // 移除记录的对话，允许下次重新记录
             recordedConversationsRef.current.delete(conversationKey);
             promises.push(
@@ -267,10 +285,12 @@ export default function TownMap() {
                 type: "conversation_end",
                 agentId: agent.id,
                 agentName: agent.name,
-                content: `${agent.name} 结束与 ${targetAgent?.name || 'Unknown'} 的交谈`,
+                content: `${agent.name} 结束与 ${
+                  targetAgent?.name || "Unknown"
+                } 的交谈`,
                 targetAgentId: prevAgent.talkingWith,
                 targetAgentName: targetAgent?.name,
-                conversationId: conversationKey
+                conversationId: conversationKey,
               })
             );
           }
@@ -282,7 +302,7 @@ export default function TownMap() {
         try {
           await Promise.all(promises);
         } catch (error) {
-          console.error('保存日志失败:', error);
+          console.error("保存日志失败:", error);
         }
       }
     };
@@ -298,9 +318,9 @@ export default function TownMap() {
   //       const agent = agents.find(a => a.id === id);
   //       return agent?.name || `Agent ${id}`;
   //     }).join(' 和 ');
-      
+
   //     addLog({
-  //       type: "conversation_start", 
+  //       type: "conversation_start",
   //       agentId: conversation.participants[0],
   //       agentName: participants,
   //       content: `${participants} 开始对话`,
@@ -723,7 +743,6 @@ export default function TownMap() {
 
   return (
     <div className=" bg-gray-100 w-[100vw]">
-
       {/* 小镇时间显示 */}
       <div className="absolute top-4 left-4 bg-card p-2 rounded-md shadow-sm z-10">
         <div className="text-xs font-medium">
@@ -776,294 +795,332 @@ export default function TownMap() {
             </div>
           </div>
           {/* 全屏地图画布 */}
-          <Stage
-            width={stageSize.width}
-            height={stageSize.height}
-            ref={stageRef}
-            scaleX={stageScale}
-            scaleY={stageScale}
-            x={stagePosition.x}
-            y={stagePosition.y}
-            onWheel={handleWheel}
-            draggable
-            onDragEnd={handleStageDragEnd}
-          >
-            <Layer
-              ref={(node) => {
-                if (node) layerRef.current = node;
+          <div className="relative">
+            {/* 背景地图图片 */}
+            <div
+              className="absolute top-0 z-1 left-0 pointer-events-none"
+              style={{
+                transform: `scale(${stageScale}) translate(${
+                  stagePosition.x / stageScale
+                }px, ${stagePosition.y / stageScale}px)`,
+                transformOrigin: "0 0",
+                width: "100%",
+                height: "100%",
               }}
             >
-              {/* 背景 */}
-              <Rect
-                x={0}
-                y={0}
-                width={MAP_CONFIG.width}
-                height={MAP_CONFIG.height}
-                fill="#f9f9f9"
+              <Image
+                src="/map.png"
+                alt="map"
+                className="w-full h-full object-cover"
+                fill
               />
+            </div>
 
-              {/* 网格线 */}
-              {Array.from({
-                length: Math.ceil(MAP_CONFIG.width / MAP_CONFIG.gridSize),
-              }).map((_, i) => (
+            <Stage
+              width={stageSize.width}
+              height={stageSize.height}
+              ref={stageRef}
+              scaleX={stageScale}
+              scaleY={stageScale}
+              x={stagePosition.x}
+              y={stagePosition.y}
+              onWheel={handleWheel}
+              draggable
+              onDragEnd={handleStageDragEnd}
+            >
+              <Layer
+                ref={(node) => {
+                  if (node) layerRef.current = node;
+                }}
+              >
+                {/* 背景 */}
                 <Rect
-                  key={`vline-${i}`}
-                  x={i * MAP_CONFIG.gridSize}
-                  y={0}
-                  width={1}
-                  height={MAP_CONFIG.height}
-                  fill="#e0e0e0"
-                />
-              ))}
-              {Array.from({
-                length: Math.ceil(MAP_CONFIG.height / MAP_CONFIG.gridSize),
-              }).map((_, i) => (
-                <Rect
-                  key={`hline-${i}`}
                   x={0}
-                  y={i * MAP_CONFIG.gridSize}
+                  y={0}
                   width={MAP_CONFIG.width}
-                  height={1}
-                  fill="#e0e0e0"
+                  height={MAP_CONFIG.height}
+                  fill="#f9f9f9"
                 />
-              ))}
 
-              {/* Room backgrounds */}
-              {MAP_CONFIG.rooms.map((room) => (
-                <Group key={`room-${room.id}`}>
+                {/* 网格线 */}
+                {Array.from({
+                  length: Math.ceil(MAP_CONFIG.width / MAP_CONFIG.gridSize),
+                }).map((_, i) => (
                   <Rect
-                    x={room.x}
-                    y={room.y}
-                    width={room.width}
-                    height={room.height}
-                    fill={room.color}
-                    stroke="#d0d0d0"
-                    strokeWidth={1}
-                    cornerRadius={2}
-                    opacity={0.3}
+                    key={`vline-${i}`}
+                    x={i * MAP_CONFIG.gridSize}
+                    y={0}
+                    width={1}
+                    height={MAP_CONFIG.height}
+                    fill="#e0e0e0"
                   />
-                  <Text
-                    text={room.name}
-                    x={room.x + 10}
-                    y={room.y + 10}
-                    fontSize={12}
-                    fill="#666"
-                    fontStyle="bold"
+                ))}
+                {Array.from({
+                  length: Math.ceil(MAP_CONFIG.height / MAP_CONFIG.gridSize),
+                }).map((_, i) => (
+                  <Rect
+                    key={`hline-${i}`}
+                    x={0}
+                    y={i * MAP_CONFIG.gridSize}
+                    width={MAP_CONFIG.width}
+                    height={1}
+                    fill="#e0e0e0"
                   />
-                </Group>
-              ))}
+                ))}
 
-              {/* Walls */}
-              {MAP_CONFIG.walls.map((wall, index) => (
-                <Rect
-                  key={`wall-${index}`}
-                  x={wall.x}
-                  y={wall.y}
-                  width={wall.width}
-                  height={wall.height}
-                  fill={wall.type === WallType.EXTERIOR ? "#34495e" : "#7f8c8d"}
-                  stroke={
-                    wall.type === WallType.EXTERIOR ? "#2c3e50" : "#95a5a6"
-                  }
-                  strokeWidth={1}
-                  cornerRadius={1}
-                />
-              ))}
+                {/* Room backgrounds */}
+                {MAP_CONFIG.rooms.map((room) => (
+                  <Group key={`room-${room.id}`}>
+                    <Rect
+                      x={room.x}
+                      y={room.y}
+                      width={room.width}
+                      height={room.height}
+                      fill={room.color}
+                      stroke="#d0d0d0"
+                      strokeWidth={1}
+                      cornerRadius={2}
+                      opacity={0.3}
+                    />
+                    <Text
+                      text={room.name}
+                      x={room.x + 10}
+                      y={room.y + 10}
+                      fontSize={12}
+                      fill="#666"
+                      fontStyle="bold"
+                    />
+                  </Group>
+                ))}
 
-              {/* Doors (openings) */}
-              {MAP_CONFIG.doors.map((door, index) => (
-                <Rect
-                  key={`door-${index}`}
-                  x={door.x}
-                  y={door.y}
-                  width={door.width}
-                  height={door.height}
-                  fill={door.isOpen ? "transparent" : "#8B4513"}
-                  stroke={door.isOpen ? "#2ECC71" : "#A0522D"}
-                  strokeWidth={door.isOpen ? 2 : 1}
-                  dash={door.isOpen ? [5, 5] : []}
-                  cornerRadius={2}
-                />
-              ))}
-
-              {/* Legacy obstacles (for backward compatibility) */}
-              {MAP_CONFIG.obstacles.map((obstacle, index) => (
-                <Rect
-                  key={`obstacle-${index}`}
-                  x={obstacle.x}
-                  y={obstacle.y}
-                  width={obstacle.width}
-                  height={obstacle.height}
-                  fill="#95a5a6"
-                  stroke="#7f8c8d"
-                  strokeWidth={1}
-                  cornerRadius={4}
-                />
-              ))}
-
-              {/* 数字人 */}
-              {agents.map((agent) => (
-                <Group key={`agent-${agent.id}`}>
-                  {/* 对话状态波纹动效 */}
-                  <ConversationRipple
-                    x={agent.position.x}
-                    y={agent.position.y}
-                    isVisible={agent.status === "talking"}
-                    layer={layerRef.current}
-                  />
-
-                  <Circle
-                    ref={(node) => {
-                      if (node) agentCirclesRef.current[agent.id] = node;
-                    }}
-                    x={agent.position.x}
-                    y={agent.position.y}
-                    radius={10}
-                    fill={agent.color}
-                    shadowColor="black"
-                    shadowBlur={agent.status === "walking" ? 4 : 0}
-                    shadowOpacity={agent.status === "walking" ? 0.4 : 0}
-                    // 添加移动动效
-                    shadowOffsetX={agent.status === "walking" ? 1 : 0}
-                    shadowOffsetY={agent.status === "walking" ? 1 : 0}
-                    // 对话状态效果和拖拽状态效果
+                {/* Walls */}
+                {MAP_CONFIG.walls.map((wall, index) => (
+                  <Rect
+                    key={`wall-${index}`}
+                    x={wall.x}
+                    y={wall.y}
+                    width={wall.width}
+                    height={wall.height}
+                    fill={
+                      wall.type === WallType.EXTERIOR ? "#34495e" : "#7f8c8d"
+                    }
                     stroke={
-                      agent.status === "talking"
-                        ? "#FFD700"
-                        : draggingAgentId === agent.id
-                        ? "#4CAF50"
-                        : "transparent"
+                      wall.type === WallType.EXTERIOR ? "#2c3e50" : "#95a5a6"
                     }
-                    strokeWidth={
-                      agent.status === "talking" || draggingAgentId === agent.id
-                        ? 2
-                        : 0
-                    }
-                    scale={
-                      agent.status === "talking"
-                        ? { x: 1.2, y: 1.2 }
-                        : draggingAgentId === agent.id
-                        ? { x: 1.1, y: 1.1 }
-                        : { x: 1, y: 1 }
-                    }
-                    // 添加点击事件
-                    onClick={() => handleAgentClick(agent.id)}
-                    onTap={() => handleAgentClick(agent.id)}
-                    // 鼠标悬停效果
-                    onMouseEnter={(e) => {
-                      const container = e.target.getStage()?.container();
-                      if (
-                        container &&
-                        (agent.status === "idle" || agent.status === "walking")
-                      ) {
-                        container.style.cursor = "grab";
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      const container = e.target.getStage()?.container();
-                      if (container) {
-                        container.style.cursor = "default";
-                      }
-                    }}
-                    // 拖拽功能（空闲和行走状态可以拖拽，对话中不可以）
-                    draggable={
-                      agent.status === "idle" || agent.status === "walking"
-                    }
-                    onDragStart={() => {
-                      handleAgentDragStart(agent.id);
-                      // 改变鼠标样式
-                      const container = stageRef.current?.container();
-                      if (container) {
-                        container.style.cursor = "grabbing";
-                      }
-                    }}
-                    onDragMove={(e) => {
-                      const newPos = { x: e.target.x(), y: e.target.y() };
-                      const validPos = handleAgentDragMove(agent.id, newPos);
-
-                      // 设置有效位置
-                      e.target.x(validPos.x);
-                      e.target.y(validPos.y);
-                    }}
-                    onDragEnd={(e) => {
-                      const finalPos = { x: e.target.x(), y: e.target.y() };
-                      const validPos = handleAgentDragEnd(agent.id, finalPos);
-
-                      // 确保最终位置有效
-                      e.target.x(validPos.x);
-                      e.target.y(validPos.y);
-
-                      // 恢复鼠标样式
-                      const container = stageRef.current?.container();
-                      if (container) {
-                        container.style.cursor = "grab";
-                      }
-                    }}
+                    strokeWidth={1}
+                    cornerRadius={1}
                   />
-                  <Text
-                    ref={(node) => {
-                      if (node) agentTextsRef.current[agent.id] = node;
-                    }}
-                    text={`${agent.name} ${
-                      agent.status === "talking" ? "💬" : ""
-                    }`}
-                    x={agent.position.x - 25}
-                    y={agent.position.y - 35}
-                    fontSize={10}
-                    fill="#333"
-                    align="center"
-                    width={50}
+                ))}
+
+                {/* Doors (openings) */}
+                {MAP_CONFIG.doors.map((door, index) => (
+                  <Rect
+                    key={`door-${index}`}
+                    x={door.x}
+                    y={door.y}
+                    width={door.width}
+                    height={door.height}
+                    fill={door.isOpen ? "transparent" : "#8B4513"}
+                    stroke={door.isOpen ? "#2ECC71" : "#A0522D"}
+                    strokeWidth={door.isOpen ? 2 : 1}
+                    dash={door.isOpen ? [5, 5] : []}
+                    cornerRadius={2}
                   />
-                </Group>
-              ))}
-            </Layer>
-          </Stage>
+                ))}
+
+                {/* Legacy obstacles (for backward compatibility) */}
+                {MAP_CONFIG.obstacles.map((obstacle, index) => (
+                  <Rect
+                    key={`obstacle-${index}`}
+                    x={obstacle.x}
+                    y={obstacle.y}
+                    width={obstacle.width}
+                    height={obstacle.height}
+                    fill="#95a5a6"
+                    stroke="#7f8c8d"
+                    strokeWidth={1}
+                    cornerRadius={4}
+                  />
+                ))}
+
+                {/* 数字人 */}
+                {agents.map((agent) => (
+                  <Group key={`agent-${agent.id}`}>
+                    {/* 对话状态波纹动效 */}
+                    <ConversationRipple
+                      x={agent.position.x}
+                      y={agent.position.y}
+                      isVisible={agent.status === "talking"}
+                      layer={layerRef.current}
+                    />
+
+                    <Circle
+                      ref={(node) => {
+                        if (node) agentCirclesRef.current[agent.id] = node;
+                      }}
+                      x={agent.position.x}
+                      y={agent.position.y}
+                      radius={10}
+                      fill={agent.color}
+                      shadowColor="black"
+                      shadowBlur={agent.status === "walking" ? 4 : 0}
+                      shadowOpacity={agent.status === "walking" ? 0.4 : 0}
+                      // 添加移动动效
+                      shadowOffsetX={agent.status === "walking" ? 1 : 0}
+                      shadowOffsetY={agent.status === "walking" ? 1 : 0}
+                      // 对话状态效果和拖拽状态效果
+                      stroke={
+                        agent.status === "talking"
+                          ? "#FFD700"
+                          : draggingAgentId === agent.id
+                          ? "#4CAF50"
+                          : "transparent"
+                      }
+                      strokeWidth={
+                        agent.status === "talking" ||
+                        draggingAgentId === agent.id
+                          ? 2
+                          : 0
+                      }
+                      scale={
+                        agent.status === "talking"
+                          ? { x: 1.2, y: 1.2 }
+                          : draggingAgentId === agent.id
+                          ? { x: 1.1, y: 1.1 }
+                          : { x: 1, y: 1 }
+                      }
+                      // 添加点击事件
+                      onClick={() => handleAgentClick(agent.id)}
+                      onTap={() => handleAgentClick(agent.id)}
+                      // 鼠标悬停效果
+                      onMouseEnter={(e) => {
+                        const container = e.target.getStage()?.container();
+                        if (
+                          container &&
+                          (agent.status === "idle" ||
+                            agent.status === "walking")
+                        ) {
+                          container.style.cursor = "grab";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        const container = e.target.getStage()?.container();
+                        if (container) {
+                          container.style.cursor = "default";
+                        }
+                      }}
+                      // 拖拽功能（空闲和行走状态可以拖拽，对话中不可以）
+                      draggable={
+                        agent.status === "idle" || agent.status === "walking"
+                      }
+                      onDragStart={() => {
+                        handleAgentDragStart(agent.id);
+                        // 改变鼠标样式
+                        const container = stageRef.current?.container();
+                        if (container) {
+                          container.style.cursor = "grabbing";
+                        }
+                      }}
+                      onDragMove={(e) => {
+                        const newPos = { x: e.target.x(), y: e.target.y() };
+                        const validPos = handleAgentDragMove(agent.id, newPos);
+
+                        // 设置有效位置
+                        e.target.x(validPos.x);
+                        e.target.y(validPos.y);
+                      }}
+                      onDragEnd={(e) => {
+                        const finalPos = { x: e.target.x(), y: e.target.y() };
+                        const validPos = handleAgentDragEnd(agent.id, finalPos);
+
+                        // 确保最终位置有效
+                        e.target.x(validPos.x);
+                        e.target.y(validPos.y);
+
+                        // 恢复鼠标样式
+                        const container = stageRef.current?.container();
+                        if (container) {
+                          container.style.cursor = "grab";
+                        }
+                      }}
+                    />
+                    <Text
+                      ref={(node) => {
+                        if (node) agentTextsRef.current[agent.id] = node;
+                      }}
+                      text={`${agent.name} ${
+                        agent.status === "talking" ? "💬" : ""
+                      }`}
+                      x={agent.position.x - 25}
+                      y={agent.position.y - 35}
+                      fontSize={10}
+                      fill="#333"
+                      align="center"
+                      width={50}
+                    />
+                  </Group>
+                ))}
+              </Layer>
+            </Stage>
+          </div>
         </div>
 
         {/* 侧边栏 */}
         <div className="w-[29vw] absolute right-0 top-0 bg-white shadow-lg rounded-lg p-4 flex flex-col h-[100vh]">
           {/* Agents 状态列表 */}
           <div className="mb-4">
-            <h3 className="text-lg font-semibold mb-3 text-gray-800">Agents 状态</h3>
+            <h3 className="text-lg font-semibold mb-3 text-gray-800">
+              Agents 状态
+            </h3>
             <div className="space-y-2 overflow-auto max-h-[200px]">
-              {agents.map(agent => (
-                <div 
+              {agents.map((agent) => (
+                <div
                   key={agent.id}
                   className={`p-2 rounded-lg border text-sm ${
-                    agent.status === 'talking' 
-                      ? 'bg-green-50 border-green-200' 
-                      : agent.status === 'walking'
-                      ? 'bg-blue-50 border-blue-200'
-                      : agent.status === 'seeking'
-                      ? 'bg-yellow-50 border-yellow-200'
-                      : 'bg-gray-50 border-gray-200'
+                    agent.status === "talking"
+                      ? "bg-green-50 border-green-200"
+                      : agent.status === "walking"
+                      ? "bg-blue-50 border-blue-200"
+                      : agent.status === "seeking"
+                      ? "bg-yellow-50 border-yellow-200"
+                      : "bg-gray-50 border-gray-200"
                   }`}
                 >
                   <div className="flex justify-between items-center">
                     <div className="flex items-center space-x-2">
-                      <div 
+                      <div
                         className="w-3 h-3 rounded-full"
                         style={{ backgroundColor: agent.color }}
                       />
-                      <span className="font-medium text-gray-700">{agent.name}</span>
+                      <span className="font-medium text-gray-700">
+                        {agent.name}
+                      </span>
                     </div>
                     <div className="flex items-center space-x-1">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        agent.status === 'talking' 
-                          ? 'bg-green-100 text-green-700' 
-                          : agent.status === 'walking'
-                          ? 'bg-blue-100 text-blue-700'
-                          : agent.status === 'seeking'
-                          ? 'bg-yellow-100 text-yellow-700'
-                          : 'bg-gray-100 text-gray-700'
-                      }`}>
-                        {agent.status === 'talking' ? '💬 交谈中' : 
-                         agent.status === 'walking' ? '🚶 行走中' :
-                         agent.status === 'seeking' ? '🔍 寻找中' : '😴 空闲'}
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-medium ${
+                          agent.status === "talking"
+                            ? "bg-green-100 text-green-700"
+                            : agent.status === "walking"
+                            ? "bg-blue-100 text-blue-700"
+                            : agent.status === "seeking"
+                            ? "bg-yellow-100 text-yellow-700"
+                            : "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        {agent.status === "talking"
+                          ? "💬 交谈中"
+                          : agent.status === "walking"
+                          ? "🚶 行走中"
+                          : agent.status === "seeking"
+                          ? "🔍 寻找中"
+                          : "😴 空闲"}
                       </span>
                       {agent.talkingWith && (
                         <span className="text-xs text-gray-500">
-                          与 {agents.find(a => a.id === agent.talkingWith)?.name || 'Unknown'} 
+                          与{" "}
+                          {agents.find((a) => a.id === agent.talkingWith)
+                            ?.name || "Unknown"}
                         </span>
                       )}
                     </div>
@@ -1075,24 +1132,26 @@ export default function TownMap() {
 
           {/* 实时日志 */}
           <div className="flex-1 flex flex-col min-h-0">
-            <h3 className="text-lg font-semibold mb-3 text-gray-800">实时日志</h3>
+            <h3 className="text-lg font-semibold mb-3 text-gray-800">
+              实时日志
+            </h3>
             <div className="flex-1 overflow-y-auto space-y-2">
               {logs.length === 0 ? (
                 <div className="text-sm text-gray-500 text-center py-8">
                   暂无日志记录...
                 </div>
               ) : (
-                logs.map(log => (
-                  <div 
-                    key={log.id} 
+                logs.map((log) => (
+                  <div
+                    key={log.id}
                     className={`p-3 rounded-lg border-l-4 text-sm ${
-                      log.type === 'conversation_start'
-                      ? 'bg-green-50 border-green-400'
-                      : log.type === 'conversation_end'
-                      ? 'bg-red-50 border-red-400'
-                      : log.type === 'conversation_message'
-                      ? 'bg-yellow-50 border-yellow-400'
-                      : 'bg-gray-50 border-gray-400'
+                      log.type === "conversation_start"
+                        ? "bg-green-50 border-green-400"
+                        : log.type === "conversation_end"
+                        ? "bg-red-50 border-red-400"
+                        : log.type === "conversation_message"
+                        ? "bg-yellow-50 border-yellow-400"
+                        : "bg-gray-50 border-gray-400"
                     }`}
                   >
                     <div className="flex justify-between items-start mb-1">
@@ -1103,9 +1162,7 @@ export default function TownMap() {
                         {new Date(log.createdAt).toLocaleTimeString()}
                       </span>
                     </div>
-                    <div className="text-gray-600">
-                      {log.content}
-                    </div>
+                    <div className="text-gray-600">{log.content}</div>
                   </div>
                 ))
               )}

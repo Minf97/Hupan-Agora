@@ -10,6 +10,7 @@ interface ChatSidebarProps {
   agentId: number;
   agentName: string;
   onClose: () => void;
+  embedded?: boolean; // 新增：是否为嵌入模式
 }
 
 interface ChatMessage {
@@ -19,7 +20,7 @@ interface ChatMessage {
   timestamp: number;
 }
 
-export default function ChatSidebar({ agentId, agentName, onClose }: ChatSidebarProps) {
+export default function ChatSidebar({ agentId, agentName, onClose, embedded = false }: ChatSidebarProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -112,27 +113,29 @@ export default function ChatSidebar({ agentId, agentName, onClose }: ChatSidebar
   };
 
   return (
-    <div className="fixed right-0 top-0 w-[29vw] h-[100vh] bg-white shadow-2xl z-50 border-l border-gray-200 flex flex-col">
-      {/* Header */}
-      <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-blue-50">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-            {agentName.charAt(0)}
+    <div className={embedded ? "h-full flex flex-col" : "fixed right-0 top-0 w-[29vw] h-[100vh] bg-white shadow-2xl z-50 border-l border-gray-200 flex flex-col"}>
+      {/* Header - 仅在非嵌入模式显示 */}
+      {!embedded && (
+        <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-blue-50">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
+              {agentName.charAt(0)}
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-800">与 {agentName} 聊天</h2>
+              <p className="text-sm text-gray-600">在线</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-bold text-gray-800">与 {agentName} 聊天</h2>
-            <p className="text-sm text-gray-600">在线</p>
-          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="w-8 h-8 rounded-full hover:bg-gray-100"
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onClose}
-          className="w-8 h-8 rounded-full hover:bg-gray-100"
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
+      )}
 
       {/* Messages */}
       <ScrollArea className="flex-1 p-4">
