@@ -140,11 +140,8 @@ class ConversationManager {
       this.conversationTimeouts.delete(conversationId);
     }
 
-    // 为每个参与者生成对话总结记忆
-    for (const participantId of conversation.participants) {
-      const summary = this.generateConversationSummary(conversation, participantId);
-      this.storeConversationMemories(participantId, [summary]);
-    }
+    // 为每个参与者生成对话总结记忆并存储到数据库
+    await this.createConversationMemories(conversation);
 
     console.log(`对话结束: ${conversationId}，原因: ${reason}`);
     
@@ -320,6 +317,60 @@ class ConversationManager {
       importance: 0.6,
       emotional_impact: 0.1
     };
+  }
+
+  // 为对话结束后创建记忆到数据库
+  private async createConversationMemories(conversation: ActiveConversation): Promise<void> {
+    try {
+      for (const participantId of conversation.participants) {
+        // 生成对话总结
+        const otherParticipants = conversation.participants
+          .filter(id => id !== participantId)
+          .map(id => getAgentPersonality(id).name)
+          .join('、');
+
+        const messageCount = conversation.messages.length;
+        const duration = Math.round((Date.now() - conversation.startTime) / 1000);
+
+        // 创建详细的对话记忆内容
+        const conversationContent = conversation.messages.map(msg => 
+          `${msg.speaker}: ${msg.content}`
+        ).join('\n');
+
+        const memoryContent = `与${otherParticipants}在${conversation.location}进行了对话（${duration}秒，${messageCount}轮）：\n${conversationContent}`;
+
+        // 计算重要性：基于对话长度、持续时间和情绪强度
+        let importance = 2; // 基础重要性
+        if (messageCount > 10) importance += 1;
+        if (duration > 120) importance += 1;
+        if (conversation.messages.some(msg => msg.emotion && msg.emotion !== 'neutral')) {
+          importance += 1;
+        }
+        importance = Math.min(importance, 5);
+
+        // 通过API存储到数据库
+        const response = await fetch('/api/memories', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            agentId: participantId,
+            content: memoryContent,
+            type: 'conversation',
+            importance: importance,
+          }),
+        });
+
+        if (response.ok) {
+          console.log(`💾 为Agent ${participantId} 存储对话记忆: ${memoryContent.substring(0, 50)}...`);
+        } else {
+          console.error(`存储Agent ${participantId} 对话记忆失败:`, await response.text());
+        }
+      }
+    } catch (error) {
+      console.error('创建对话记忆失败:', error);
+    }
   }
 }
 

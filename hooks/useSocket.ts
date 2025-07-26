@@ -16,6 +16,7 @@ interface SocketCallbacks {
   onConversationEnd: (data: any) => void;
   onConversationMessage: (data: any) => void;
   onStopAgentMovement: (data: { agentId: number }) => void;
+  onAgentStateUpdate: (data: { agentId: number; status: string; position: { x: number; y: number } }) => void;
 }
 
 const setupSocketListeners = (socket: Socket, callbacks: SocketCallbacks) => {
@@ -41,6 +42,7 @@ const setupSocketListeners = (socket: Socket, callbacks: SocketCallbacks) => {
   socket.on("conversation_end", callbacks.onConversationEnd);
   socket.on("conversation_message", callbacks.onConversationMessage);
   socket.on("stop_agent_movement", callbacks.onStopAgentMovement);
+  socket.on("agentStateUpdate", callbacks.onAgentStateUpdate);
 
   return () => {
     socket.off("connect", callbacks.onConnect);
@@ -52,6 +54,7 @@ const setupSocketListeners = (socket: Socket, callbacks: SocketCallbacks) => {
     socket.off("conversation_end");
     socket.off("conversation_message");
     socket.off("stop_agent_movement");
+    socket.off("agentStateUpdate");
   };
 };
 

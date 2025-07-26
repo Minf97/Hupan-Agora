@@ -47,6 +47,7 @@ console.log('Socket.IO服务器已初始化，等待连接...');
 
 // 导入数据库服务
 const { getAllAgents, updateAgentState } = require('./db/services/agents-cjs');
+const { addThought } = require('./lib/thoughts-service-cjs');
 
 // 存储agent状态（从数据库加载）
 let agentStates = [];
@@ -285,6 +286,23 @@ io.on('connection', async (socket) => {
             console.error(`同步Agent ${collidedAgent.id} 状态到数据库失败:`, error);
           }
         }
+
+        // 🔥 立即广播两个 agent 的状态变化给所有客户端
+        console.log(`📡 广播 Agent ${data.agentId} 和 Agent ${collidedAgent.id} 状态变为 talking`);
+        
+        // 广播第一个 agent 的状态变化
+        io.emit('agentStateUpdate', {
+          agentId: data.agentId,
+          status: 'talking',
+          position: { x: updates.x, y: updates.y }
+        });
+
+        // 广播第二个 agent 的状态变化  
+        io.emit('agentStateUpdate', {
+          agentId: collidedAgent.id,
+          status: 'talking',
+          position: { x: collidedAgent.x, y: collidedAgent.y }
+        });
 
         // 记录活跃对话
         const conversationId = `conv-${data.agentId}-${collidedAgent.id}-${Date.now()}`;
@@ -634,6 +652,23 @@ async function generateConversationMessages(conversationId, participants) {
           conversationId,
           message: messageData
         });
+
+        // 保存对话到 thoughts 数据库
+        try {
+          await addThought({
+            agentId: speakerId,
+            agentName: speaker,
+            type: 'conversation',
+            content: message.content,
+            metadata: {
+              emotion: message.emotion,
+              conversationId: conversationId
+            }
+          });
+          console.log(`💾 已保存 ${speaker} 的对话到 thoughts 表`);
+        } catch (error) {
+          console.error(`保存对话到 thoughts 表失败:`, error);
+        }
 
         console.log(`🗣️  ${speaker}: ${message.content} [${message.emotion}]`);
 

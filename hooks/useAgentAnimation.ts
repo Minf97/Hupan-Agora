@@ -29,26 +29,42 @@ export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallb
   const gridRef = useRef(createGrid());
   
   // 停止指定agent的动画
-  const stopAgentAnimation = (agentId: number) => {
+  const stopAgentAnimation = (agentId: number, updateToIdle: boolean = true) => {
     if (animationsRef.current[agentId]) {
-      console.log(`⏹️ 停止 Agent ${agentId} 的动画`);
+      console.log(`⏹️ 停止 Agent ${agentId} 的动画 ${updateToIdle ? '(设为idle)' : '(保持当前状态)'}`);
       animationsRef.current[agentId].stop();
       delete animationsRef.current[agentId];
       
-      // 更新agent状态为idle
-      callbacks.onAgentUpdate((prev) =>
-        prev.map((agent) =>
-          agent.id === agentId
-            ? {
-                ...agent,
-                status: "idle" as const,
-                target: null,
-                walkStartTime: undefined,
-                walkDuration: undefined,
-              }
-            : agent
-        )
-      );
+      // 只有在指定时才更新agent状态为idle
+      if (updateToIdle) {
+        callbacks.onAgentUpdate((prev) =>
+          prev.map((agent) =>
+            agent.id === agentId
+              ? {
+                  ...agent,
+                  status: "idle" as const,
+                  target: null,
+                  walkStartTime: undefined,
+                  walkDuration: undefined,
+                }
+              : agent
+          )
+        );
+      } else {
+        // 仅清除移动相关属性，但保持当前状态
+        callbacks.onAgentUpdate((prev) =>
+          prev.map((agent) =>
+            agent.id === agentId
+              ? {
+                  ...agent,
+                  target: null,
+                  walkStartTime: undefined,
+                  walkDuration: undefined,
+                }
+              : agent
+          )
+        );
+      }
     }
   };
   
@@ -220,28 +236,7 @@ export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallb
       if (message) {
         console.log(`${message.speaker}: ${message.content}`);
         
-        // 记录对话
-        if (callbacks.onThoughtLog) {
-          const conversation = conversationManager.getConversation(conversationId);
-          if (conversation) {
-            // 找到说话者的ID
-            const speakerId = conversation.participants.find(id => 
-              getAgentPersonality(id).name === message.speaker
-            );
-            
-            if (speakerId) {
-              callbacks.onThoughtLog.addConversation(
-                speakerId,
-                message.speaker,
-                message.content,
-                {
-                  emotion: message.emotion,
-                  conversationId
-                }
-              );
-            }
-          }
-        }
+        // 不再记录每条对话消息，只在对话结束时创建总结记忆
         
         // 继续对话（在一定延迟后）
         setTimeout(continueConversation, 2000 + Math.random() * 3000); // 2-5秒随机延迟

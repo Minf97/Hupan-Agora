@@ -57,6 +57,44 @@ export const useSocketManager = () => {
     onStopAgentMovement: (data: { agentId: number }) => {
       console.log(`收到停止Agent ${data.agentId} 移动的请求`);
       stopAgentAnimation(data.agentId);
+    },
+    onAgentStateUpdate: (data: { agentId: number; status: string; position: { x: number; y: number } }) => {
+      console.log(`🔄 收到Agent ${data.agentId} 状态更新: ${data.status}`, data.position);
+      
+      // 如果状态变为talking，需要立即停止该agent的移动动画
+      if (data.status === 'talking') {
+        console.log(`🛑 停止Agent ${data.agentId} 的移动动画（进入talking状态）`);
+        stopAgentAnimation(data.agentId, false); // 不设置为idle，保持talking状态
+        
+        // 立即更新 Konva circle 和 text 的位置
+        const circle = agentCirclesRef.current[data.agentId];
+        const text = agentTextsRef.current[data.agentId];
+        
+        if (circle) {
+          circle.x(data.position.x);
+          circle.y(data.position.y);
+          circle.getLayer()?.batchDraw();
+        }
+        
+        if (text) {
+          text.x(data.position.x);
+          text.y(data.position.y - 15);
+          text.getLayer()?.batchDraw();
+        }
+      }
+      
+      // 立即更新agent状态
+      setAgents((prev) => 
+        prev.map((agent) =>
+          agent.id === data.agentId
+            ? {
+                ...agent,
+                status: data.status as AgentState["status"],
+                position: data.position
+              }
+            : agent
+        )
+      );
     }
   });
 

@@ -41,8 +41,95 @@ interface ThoughtRecord {
   };
 }
 
+// 对话波纹动效组件
+interface ConversationRippleProps {
+  x: number;
+  y: number;
+  isVisible: boolean;
+  layer?: Konva.Layer | null;
+}
+
+const ConversationRipple: React.FC<ConversationRippleProps> = ({ x, y, isVisible, layer }) => {
+  const [ripples, setRipples] = useState<Array<{ id: string; radius: number; opacity: number }>>([]);
+  const animationRef = useRef<Konva.Animation | null>(null);
+  const rippleIdCounter = useRef(0);
+
+  useEffect(() => {
+    if (!isVisible || !layer) {
+      // 停止动画并清除波纹
+      if (animationRef.current) {
+        animationRef.current.stop();
+        animationRef.current = null;
+      }
+      setRipples([]);
+      return;
+    }
+
+    // 创建波纹动画
+    const createNewRipple = () => {
+      const newRipple = {
+        id: `ripple-${rippleIdCounter.current++}`,
+        radius: 15,
+        opacity: 0.6,
+      };
+      
+      setRipples(prev => [...prev, newRipple]);
+    };
+
+    // 启动动画
+    const animation = new Konva.Animation((frame) => {
+      if (!frame) return;
+
+      setRipples(prev => {
+        return prev.map(ripple => ({
+          ...ripple,
+          radius: ripple.radius + 0.8, // 波纹扩散速度
+          opacity: Math.max(0, ripple.opacity - 0.008), // 透明度衰减
+        })).filter(ripple => ripple.opacity > 0 && ripple.radius < 40); // 移除完全透明或过大的波纹
+      });
+    }, layer);
+
+    animationRef.current = animation;
+    animation.start();
+
+    // 定期创建新波纹
+    const rippleInterval = setInterval(createNewRipple, 800);
+    
+    // 立即创建第一个波纹
+    createNewRipple();
+
+    return () => {
+      if (animation) {
+        animation.stop();
+      }
+      clearInterval(rippleInterval);
+    };
+  }, [isVisible, layer, x, y]);
+
+  if (!isVisible) return null;
+
+  return (
+    <>
+      {ripples.map(ripple => (
+        <Ring
+          key={ripple.id}
+          x={x}
+          y={y}
+          innerRadius={Math.max(0, ripple.radius - 3)}
+          outerRadius={ripple.radius}
+          fill="rgba(255, 215, 0, 0.3)"
+          stroke="#FFD700"
+          strokeWidth={1}
+          opacity={ripple.opacity}
+        />
+      ))}
+    </>
+  );
+};
+
 export default function TownMap() {
   const stageRef = useRef<Konva.Stage | null>(null);
+  const layerRef = useRef<Konva.Layer | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [draggingAgentId, setDraggingAgentId] = useState<number | null>(null);
   const [selectedConversation, setSelectedConversation] = useState<
@@ -450,7 +537,7 @@ export default function TownMap() {
   }, []);
 
   return (
-    <div className="relative rounded-lg overflow-hidden border">
+    <div className={`relative rounded-lg overflow-hidden border transition-all duration-200 ${selectedConversation ? 'mr-80' : ''}`}>
       {/* 连接状态显示 */}
       <div className="absolute top-2 left-2 bg-card p-2 rounded-md shadow-sm z-10">
         <div
@@ -463,7 +550,7 @@ export default function TownMap() {
       </div>
 
       {/* 小镇时间显示 */}
-      <div className="absolute top-2 right-2 bg-card p-2 rounded-md shadow-sm z-10">
+      <div className={`absolute top-2 bg-card p-2 rounded-md shadow-sm z-10 transition-all duration-200 ${selectedConversation ? 'right-[322px]' : 'right-2'}`}>
         <div className="text-sm font-semibold">
           小镇时间: {townTime.hour.toString().padStart(2, "0")}:
           {townTime.minute.toString().padStart(2, "0")}
@@ -488,7 +575,7 @@ export default function TownMap() {
       </div>
 
       {/* 对话消息面板 */}
-      <div className="absolute bottom-2 right-2 bg-card p-2 rounded-md shadow-sm z-10 max-w-[300px] max-h-[200px] overflow-y-auto">
+      <div className={`absolute bottom-2 bg-card p-2 rounded-md shadow-sm z-10 max-w-[300px] max-h-[200px] overflow-y-auto transition-all duration-200 ${selectedConversation ? 'right-[322px]' : 'right-2'}`}>
         {conversationThoughts.slice(-5).map((thought) => (
           <div key={thought.id} className="text-xs">
             <span className="font-medium text-blue-600">{thought.agentName}:</span>
@@ -513,7 +600,7 @@ export default function TownMap() {
       </div>
 
       {/* 缩放控制按钮 */}
-      <div className="absolute top-4 right-[320px] z-20 flex flex-col space-y-2">
+      <div className={`absolute top-4 z-20 flex flex-col space-y-2 transition-all duration-200 ${selectedConversation ? 'right-[400px]' : 'right-[320px]'}`}>
         <button
           onClick={zoomIn}
           className="w-10 h-10 bg-white border border-gray-300 rounded-lg shadow-md hover:bg-gray-50 flex items-center justify-center font-bold text-lg"
@@ -555,7 +642,11 @@ export default function TownMap() {
             draggable
             onDragEnd={handleStageDragEnd}
           >
-            <Layer>
+            <Layer 
+              ref={(node) => {
+                if (node) layerRef.current = node;
+              }}
+            >
               {/* 背景 */}
               <Rect
                 x={0}
@@ -667,18 +758,13 @@ export default function TownMap() {
               {/* 数字人 */}
               {agents.map((agent) => (
                 <Group key={`agent-${agent.id}`}>
-                  {/* 对话状态外环 */}
-                  {agent.status === "talking" && (
-                    <Ring
-                      x={agent.position.x}
-                      y={agent.position.y}
-                      innerRadius={12}
-                      outerRadius={16}
-                      fill="transparent"
-                      stroke="#FFD700"
-                      strokeWidth={2}
-                    />
-                  )}
+                  {/* 对话状态波纹动效 */}
+                  <ConversationRipple
+                    x={agent.position.x}
+                    y={agent.position.y}
+                    isVisible={agent.status === "talking"}
+                    layer={layerRef.current}
+                  />
 
                   <Circle
                     ref={(node) => {
@@ -919,70 +1005,72 @@ export default function TownMap() {
         </div>
       </div>
 
-      {/* 对话详情弹窗 */}
+      {/* 对话详情面板 - 在右侧栏显示 */}
       {selectedConversation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[80vh] flex flex-col">
-            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-              <h2 className="text-lg font-semibold">对话详情</h2>
-              <button
-                onClick={() => setSelectedConversation(null)}
-                className="text-gray-400 hover:text-gray-600 text-xl"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              {(() => {
-                const conversation =
-                  activeConversations.get(selectedConversation);
-                const conversationMessages = conversationThoughts.filter(
-                  (thought) => thought.metadata?.conversationId === selectedConversation
-                );
+        <div className="absolute top-0 right-0 w-80 h-full bg-white border-l border-gray-200 shadow-lg z-40 flex flex-col animate-in slide-in-from-right duration-200">
+          <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-blue-50">
+            <h2 className="text-lg font-semibold text-blue-800">对话详情</h2>
+            <button
+              onClick={() => setSelectedConversation(null)}
+              className="text-blue-400 hover:text-blue-600 text-xl font-bold"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            {(() => {
+              const conversation =
+                activeConversations.get(selectedConversation);
+              const conversationMessages = conversationThoughts.filter(
+                (thought) => thought.metadata?.conversationId === selectedConversation
+              );
 
-                return (
-                  <div className="space-y-4">
-                    {conversation && (
-                      <div className="bg-blue-50 p-3 rounded-lg">
-                        <div className="font-medium text-blue-800">
-                          {conversation.agent1Name} 与 {conversation.agent2Name}
+              return (
+                <div className="space-y-4">
+                  {conversation && (
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                      <div className="font-medium text-blue-800">
+                        {conversation.agent1Name} 与 {conversation.agent2Name}
+                      </div>
+                      <div className="text-sm text-blue-600 mt-1">
+                        开始时间:{" "}
+                        {new Date(conversation.startTime).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    {conversationMessages.length > 0 ? (
+                      conversationMessages.map((thought) => (
+                        <div
+                          key={thought.id}
+                          className="bg-gray-50 p-3 rounded-lg border border-gray-200"
+                        >
+                          <div className="font-medium text-gray-800 mb-1 flex items-center">
+                            <span className="text-blue-600 mr-2">💬</span>
+                            {thought.agentName}
+                          </div>
+                          <div className="text-gray-700 text-sm leading-relaxed">
+                            {thought.content}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-2">
+                            {new Date(thought.timestamp).toLocaleString()}
+                          </div>
                         </div>
-                        <div className="text-sm text-blue-600 mt-1">
-                          开始时间:{" "}
-                          {new Date(conversation.startTime).toLocaleString()}
+                      ))
+                    ) : (
+                      <div className="text-center text-gray-400 py-8">
+                        <div className="text-2xl mb-2">💬</div>
+                        <div className="text-sm">暂无对话记录</div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          对话正在进行中，请稍候...
                         </div>
                       </div>
                     )}
-
-                    <div className="space-y-3">
-                      {conversationMessages.length > 0 ? (
-                        conversationMessages.map((thought, index) => (
-                          <div
-                            key={thought.id}
-                            className="bg-gray-50 p-3 rounded-lg"
-                          >
-                            <div className="font-medium text-gray-800 mb-1">
-                              {thought.agentName}
-                            </div>
-                            <div className="text-gray-600 text-sm">
-                              {thought.content}
-                            </div>
-                            <div className="text-xs text-gray-400 mt-2">
-                              {new Date(thought.timestamp).toLocaleString()}
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-center text-gray-400 py-8">
-                          <div className="text-2xl mb-2">💬</div>
-                          <div className="text-sm">暂无对话记录</div>
-                        </div>
-                      )}
-                    </div>
                   </div>
-                );
-              })()}
-            </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
