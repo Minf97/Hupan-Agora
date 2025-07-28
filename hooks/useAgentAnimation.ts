@@ -5,7 +5,7 @@ import PF from "pathfinding";
 import { MAP_CONFIG, AgentState, Wall, Door } from "@/lib/map-config";
 import { calculateDistance, checkForMeetings, processAgentEncounter, MEETING_DISTANCE_THRESHOLD, getAgentStatusSummary } from "@/lib/agent-utils";
 import { getConversationManager } from "@/lib/conversation-manager";
-import { getAgentPersonality } from "@/lib/agent-personality";
+import { getAgentPersonalityFromDB } from "@/lib/agent-database";
 
 interface AnimationRefs {
   agentCirclesRef: React.MutableRefObject<{ [key: number]: Konva.Circle }>;
@@ -22,6 +22,12 @@ interface AnimationCallbacks {
     addDecision: (agentId: number, agentName: string, decision: string, metadata?: any) => void;
     addConversation: (agentId: number, agentName: string, message: string, metadata?: any) => void;
   };
+  onRealtimeLog?: (entry: {
+    type: 'conversation' | 'inner_thought' | 'decision';
+    agentName: string;
+    content: string;
+    emotion?: string;
+  }) => void;
 }
 
 export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallbacks) => {
@@ -149,10 +155,14 @@ export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallb
         townTime: { hour: now.getHours(), minute: now.getMinutes() }
       });
 
+      // Get agent personalities for logging
+      const agent1Personality = await getAgentPersonalityFromDB(agent1Id);
+      const agent2Personality = await getAgentPersonalityFromDB(agent2Id);
+
       // 记录内心思考
       if (callbacks.onThoughtLog) {
-        const agent1Name = getAgentPersonality(agent1Id).name;
-        const agent2Name = getAgentPersonality(agent2Id).name;
+        const agent1Name = agent1Personality.name;
+        const agent2Name = agent2Personality.name;
         
         callbacks.onThoughtLog.addInnerThought(
           agent1Id,
@@ -188,8 +198,9 @@ export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallb
         
         // 记录决策
         if (callbacks.onThoughtLog) {
-          const agent1Name = getAgentPersonality(agent1Id).name;
-          const agent2Name = getAgentPersonality(agent2Id).name;
+          // We already have the personalities from above
+          const agent1Name = agent1Personality.name;
+          const agent2Name = agent2Personality.name;
           
           if (encounterResult.agent1WantsToChat) {
             callbacks.onThoughtLog.addDecision(
@@ -245,6 +256,16 @@ export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallb
       
       if (message) {
         console.log(`${message.speaker}: ${message.content}`);
+        
+        // 添加到实时日志
+        if (callbacks.onRealtimeLog) {
+          callbacks.onRealtimeLog({
+            type: 'conversation',
+            agentName: message.speaker,
+            content: message.content,
+            emotion: message.emotion
+          });
+        }
         
         // 不再记录每条对话消息，只在对话结束时创建总结记忆
         

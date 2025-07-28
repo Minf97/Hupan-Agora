@@ -91,7 +91,7 @@ export const useThoughtLogger = () => {
           const result = await response.value.json();
           if (result.success) {
             // 异步处理记忆转换（不阻塞）
-            ThoughtToMemoryService.processThoughtToMemory(result.data).catch(console.error);
+            ThoughtToMemoryService.addThoughtToQueue(result.data);
           }
         }
       }

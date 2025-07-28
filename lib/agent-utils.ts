@@ -1,6 +1,7 @@
 // lib/agent-utils.ts
 import { AgentState } from "@/lib/map-config";
-import { AgentPersonality, calculateChatWillingness, getAgentPersonality } from './agent-personality';
+import { AgentPersonality, calculateChatWillingness } from './agent-personality';
+import { getAgentPersonalityFromDB } from './agent-database';
 import { getAIService, InnerThoughtRequest, InnerThoughtResponse } from './ai-service';
 
 // 计算两点间距离 - 增强版本
@@ -119,8 +120,9 @@ export async function processAgentEncounter(
   agent1Thoughts: InnerThoughtResponse;
   agent2Thoughts: InnerThoughtResponse;
 }> {
-  const agent1Personality = getAgentPersonality(agent1Id);
-  const agent2Personality = getAgentPersonality(agent2Id);
+  // 从数据库获取 agent 个性信息
+  const agent1Personality = await getAgentPersonalityFromDB(agent1Id);
+  const agent2Personality = await getAgentPersonalityFromDB(agent2Id);
 
   try {
     const aiService = getAIService();
@@ -173,37 +175,9 @@ export async function processAgentEncounter(
   } catch (error) {
     console.error('AI service error during encounter processing:', error);
     
-    // 降级处理：使用基础的概率计算
-    const willingness = calculateChatWillingness(
-      agent1Personality,
-      agent2Personality,
-      {
-        timeOfDay: context.townTime.hour,
-        location: context.location
-      }
-    );
-
-    const shouldChat = willingness > 0.5;
-    
-    return {
-      agent1WantsToChat: shouldChat,
-      agent2WantsToChat: shouldChat,
-      agent1Thoughts: createFallbackThoughts(agent1Id, shouldChat),
-      agent2Thoughts: createFallbackThoughts(agent2Id, shouldChat)
-    };
+    // 不再使用 fallback，直接抛出错误
+    throw new Error(`AI service connection failed and no fallback allowed - all functions must connect to real services: ${error}`);
   }
-}
-
-// 创建降级的思考结果
-function createFallbackThoughts(_agentId: number, shouldChat: boolean = false): InnerThoughtResponse {
-  return {
-    shouldInitiateChat: shouldChat,
-    confidence: 0.3,
-    reasoning: 'AI服务不可用，使用基础逻辑判断',
-    internal_monologue: shouldChat 
-      ? `嗯，要不要和对方打个招呼呢？` 
-      : `现在不太想聊天，先观察一下吧。`
-  };
 }
 
 // 内心OS (反思) - 保留原接口兼容性

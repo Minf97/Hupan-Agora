@@ -10,10 +10,16 @@ const openai = new OpenAI({
 
 /**
  * 使用OpenAI的API将文本转换为嵌入向量
+ * 注意：此函数不再包含任何 mock 或假数据，必须连接真实的 API
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
-  console.log(process.env.NEXT_PUBLIC_OPENAI_BASE_URL, "process.env.NEXT_PUBLIC_OPENAI_BASE_URL");
-  console.log(process.env.NEXT_PUBLIC_OPENAI_API_KEY, "process.env.NEXT_PUBLIC_OPENAI_API_KEY");
+  console.log(process.env.NEXT_PUBLIC_OPENAI_BASE_URL, "OPENAI_BASE_URL");
+  console.log(process.env.NEXT_PUBLIC_OPENAI_API_KEY ? "API_KEY_SET" : "API_KEY_MISSING", "API_KEY_STATUS");
+  
+  if (!process.env.NEXT_PUBLIC_OPENAI_API_KEY) {
+    throw new Error('NEXT_PUBLIC_OPENAI_API_KEY is not configured');
+  }
+  
   try {
     // 尝试使用 OpenAI SDK
     const response = await openai.embeddings.create({
@@ -21,11 +27,13 @@ export async function generateEmbedding(text: string): Promise<number[]> {
       input: text,
     });
     
+    console.log(`✅ 成功生成 ${text.substring(0, 50)}... 的向量嵌入`);
     return response.data[0].embedding;
+    
   } catch (error) {
     console.error('OpenAI 嵌入 API 失败，尝试备用方案:', error);
     
-    // 备用方案：使用手动 fetch 调用，类似 ai-service.ts 的实现
+    // 备用方案：使用手动 fetch 调用
     try {
       const baseURL = process.env.NEXT_PUBLIC_OPENAI_BASE_URL || "https://api.openai.com";
       const apiUrl = `${baseURL}/v1/embeddings`;
@@ -42,50 +50,19 @@ export async function generateEmbedding(text: string): Promise<number[]> {
         }),
       });
 
-      console.log(response, "response!!");
-      
-
       if (!response.ok) {
         const errorData = await response.text();
-        console.error("嵌入 API 错误:", response.status, errorData);
-        
-        // 如果嵌入 API 不可用，返回模拟向量
-        console.warn('嵌入 API 不可用，使用模拟向量');
-        return generateMockEmbedding(text);
+        console.error("❌ 嵌入 API 错误:", response.status, errorData);
+        throw new Error(`Embedding API error: ${response.status} - ${errorData}`);
       }
 
       const data = await response.json();
+      console.log(`✅ 通过备用方案成功生成 ${text.substring(0, 50)}... 的向量嵌入`);
       return data.data[0].embedding;
+      
     } catch (fetchError) {
-      console.error('手动 fetch 也失败:', fetchError);
-      // 最终备用方案：生成模拟嵌入向量
-      return generateMockEmbedding(text);
+      console.error('❌ 手动 fetch 也失败:', fetchError);
+      throw new Error(`Failed to generate embedding: ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`);
     }
   }
-}
-
-// 生成模拟嵌入向量的备用函数
-function generateMockEmbedding(text: string): number[] {
-  // 基于文本内容生成确定性的 1536 维向量（text-embedding-3-small 的维度）
-  const dimension = 1536;
-  const embedding = new Array(dimension);
-  
-  // 使用简单的哈希函数生成确定性向量
-  let hash = 0;
-  for (let i = 0; i < text.length; i++) {
-    const char = text.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
-  }
-  
-  // 生成向量
-  for (let i = 0; i < dimension; i++) {
-    // 使用伪随机数生成器创建确定性向量
-    hash = (hash * 9301 + 49297) % 233280;
-    embedding[i] = (hash / 233280 - 0.5) * 2; // 归一化到 [-1, 1]
-  }
-  
-  // 归一化向量
-  const norm = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
-  return embedding.map(val => val / norm);
 } 

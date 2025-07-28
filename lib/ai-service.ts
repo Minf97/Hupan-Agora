@@ -5,6 +5,8 @@ export interface SimpleAgent {
   id: number;
   name: string;
   bg?: string; // 背景信息，包含性格、兴趣等
+  tags?: string[]; // 标签数组
+  chatbot_history?: any[]; // 聊天历史
 }
 
 export interface AIServiceConfig {
@@ -288,31 +290,15 @@ ${conversationHistory.length > 0 ?
   private fallbackInnerThought(
     _request: InnerThoughtRequest
   ): InnerThoughtResponse {
-    // 简单的降级逻辑
-    return {
-      shouldInitiateChat: Math.random() > 0.5,
-      confidence: 0.3,
-      reasoning: "无法连接AI服务，使用随机决策",
-      internal_monologue: "嗯，要不要打个招呼呢？",
-    };
+    // 不再使用 mock 数据，直接抛出错误
+    throw new Error("AI service connection failed and no fallback allowed - all functions must connect to real services");
   }
 
   private fallbackConversation(
     _request: ConversationRequest
   ): ConversationResponse {
-    const responses = [
-      "你好！",
-      "最近怎么样？",
-      "今天天气不错呢",
-      "很高兴见到你",
-    ];
-    return {
-      innerThought: "AI服务暂时不可用，使用默认回复",
-      chat: responses[Math.floor(Math.random() * responses.length)],
-      shouldEnd: false,
-      nextAction: null,
-      emotion: "neutral",
-    };
+    // 不再使用 mock 数据，直接抛出错误
+    throw new Error("AI service connection failed and no fallback allowed - all functions must connect to real services");
   }
 }
 

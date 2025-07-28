@@ -240,32 +240,7 @@ ${agentBackground}`
   }
 }
 
-// 简单的降级回复函数
+// 不再提供降级回复，必须使用真实的AI服务
 function generateSimpleReply(agentName: string, userMessage: string): string {
-  const responses = [
-    `你好！我是${agentName}，很高兴和你聊天。`,
-    `${agentName}在这里，有什么我可以帮助你的吗？`,
-    `作为${agentName}，我觉得你说得很有趣。`,
-    `嗯，让我想想... 作为${agentName}，我认为这是个好问题。`,
-    `${agentName}表示理解，请告诉我更多。`,
-    `这很有意思！${agentName}想了解更多细节。`,
-    `${agentName}觉得我们可以继续深入讨论这个话题。`,
-  ];
-
-  // 根据用户消息内容选择更合适的回复
-  if (userMessage.includes("你好") || userMessage.includes("hello")) {
-    return `你好！我是${agentName}，很高兴认识你！`;
-  }
-
-  if (userMessage.includes("谢谢") || userMessage.includes("thank")) {
-    return `不客气！${agentName}很乐意帮助你。`;
-  }
-
-  if (userMessage.includes("再见") || userMessage.includes("bye")) {
-    return `再见！${agentName}期待下次和你聊天。`;
-  }
-
-  // 随机选择一个回复
-  const randomIndex = Math.floor(Math.random() * responses.length);
-  return responses[randomIndex];
+  throw new Error("Chat functionality must use real AI service - no hardcoded fallback replies allowed");
 }

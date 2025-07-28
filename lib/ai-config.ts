@@ -18,8 +18,7 @@ export function initializeAIService(config?: Partial<AIServiceConfig>): void {
   };
 
   if (!finalConfig.apiKey) {
-    console.warn('AI service API key not found. Using fallback responses.');
-    // 可以设置一个fallback provider或者使用mock服务
+    throw new Error('AI service API key not found. Please configure NEXT_PUBLIC_OPENAI_API_KEY or equivalent.');
   }
 
   try {

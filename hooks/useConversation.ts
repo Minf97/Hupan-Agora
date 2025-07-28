@@ -53,28 +53,8 @@ export const useConversation = () => {
       return newMap;
     });
 
-    // 生成随机的初始对话消息
-    setTimeout(() => {
-      const initialMessage = {
-        conversationId,
-        speaker: agent1Name,
-        content: "你好，今天天气不错！",
-        timestamp: Date.now()
-      };
-
-      setConversationMessages((prev) => [...prev, initialMessage]);
-
-      setTimeout(() => {
-        const replyMessage = {
-          conversationId,
-          speaker: agent2Name,
-          content: "是的，阳光明媚，心情也很好！",
-          timestamp: Date.now() + 1000
-        };
-
-        setConversationMessages((prev) => [...prev, replyMessage]);
-      }, 1000);
-    }, 500);
+    // 对话开始时不再生成假消息，等待来自 Worker 的真实 AI 对话
+    console.log(`🎭 对话开始: ${agent1Name} ↔ ${agent2Name}，等待 AI 生成真实对话内容...`);
   };
 
   const handleConversationEnd = (

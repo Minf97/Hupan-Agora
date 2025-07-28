@@ -12,6 +12,7 @@ export interface SocketAgent {
   color: string;
   status: string;
   currentTask?: string | null;
+  avatar?: string | null;
 }
 
 // 获取所有agent（返回Socket格式）
@@ -25,7 +26,8 @@ export async function getAllAgents(db: Database): Promise<SocketAgent[]> {
       y: parseFloat(agent.y || '5'),
       color: agent.color || '#FF5733',
       status: agent.status || 'idle',
-      currentTask: null // Reset current task on server start
+      currentTask: null, // Reset current task on server start
+      avatar: agent.avatarUrl || null
     }));
   } catch (error) {
     console.error('Error fetching agents:', error);

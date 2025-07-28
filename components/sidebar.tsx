@@ -46,7 +46,7 @@ export function MainSidebar() {
                 <SheetTitle>斯坦福小镇</SheetTitle>
               </SheetHeader>
               <div className="mt-4">
-                <SidebarNav pathname={pathname} setOpen={setOpen} />
+                <SidebarNav pathname={pathname || '/'} setOpen={setOpen} />
               </div>
             </SheetContent>
           </Sheet>
@@ -55,7 +55,7 @@ export function MainSidebar() {
       <div className="hidden md:block">
         <div className="flex h-[calc(100vh-64px)] flex-col">
           <div className="flex-1 overflow-auto py-2">
-            <SidebarNav pathname={pathname} />
+            <SidebarNav pathname={pathname || '/'} />
           </div>
         </div>
       </div>

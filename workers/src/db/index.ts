@@ -1,18 +1,23 @@
 // workers/src/db/index.ts - Supabase connection for Cloudflare Workers
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import * as schema from './schema';
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import * as schema from "./schema";
 
 // Database connection function for Cloudflare Workers
 export function createDatabaseConnection(databaseUrl: string) {
-  const client = postgres(databaseUrl, {
-    ssl: 'require',
-    max: 1, // Important for Cloudflare Workers
-    idle_timeout: 20,
-    connect_timeout: 10,
-  });
-  
-  return drizzle(client, { schema });
+  console.log(
+    "Creating database connection with URL:",
+    databaseUrl ? "URL provided" : "No URL"
+  );
+
+  // 检查数据库URL格式
+  if (!databaseUrl || !databaseUrl.startsWith("postgresql://")) {
+    throw new Error("Invalid or missing DATABASE_URL");
+  }
+
+  const client = postgres(databaseUrl);
+
+  return drizzle({ client, schema });
 }
 
 // Type for database instance

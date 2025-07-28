@@ -4,18 +4,21 @@
   "description": "WebSocket server for hackthon-x using Hono on Cloudflare Workers with Supabase",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --local --port 8787",
+    "dev:remote": "wrangler dev",
     "deploy": "wrangler deploy",
-    "tail": "wrangler tail"
+    "tail": "wrangler tail",
+    "test": "wrangler dev --local --test-scheduled",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "drizzle-orm": "^0.44.3",
     "hono": "^4.0.0",
-    "postgres": "^3.4.7",
-    "drizzle-orm": "^0.44.3"
+    "postgres": "^3.4.7"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240117.0",
-    "wrangler": "^3.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "wrangler": "^4.26.0"
   }
 }

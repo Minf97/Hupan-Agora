@@ -7,11 +7,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { X } from "lucide-react";
 import ChatSidebar from "@/components/ChatSidebar";
 import Image from "next/image";
+import useAgentCacheStore from '@/lib/agent-cache-store';
+import { useSocketManager } from "@/hooks/useSocketManager";
 
 interface AgentDetailSidebarProps {
   agentId: number;
   onClose: () => void;
-  agents: any[];
 }
 
 interface ThoughtRecord {
@@ -33,8 +34,8 @@ interface ThoughtRecord {
 export default function AgentDetailSidebar({
   agentId,
   onClose,
-  agents,
 }: AgentDetailSidebarProps) {
+  const { agents } = useSocketManager();
   const [agentData, setAgentData] = useState<any>(null);
   const [agentThoughts, setAgentThoughts] = useState<ThoughtRecord[]>([]);
   const [loadingThoughts, setLoadingThoughts] = useState(false);
@@ -42,14 +43,15 @@ export default function AgentDetailSidebar({
 
   const agent = agents.find((a) => a.id === agentId);
 
+  const { getAgent } = useAgentCacheStore();
+
   useEffect(() => {
     const fetchAgentData = async () => {
       try {
-        const response = await fetch(`/api/agents/${agentId}`);
-        if (response.ok) {
-          const data = await response.json();
-          setAgentData(data);
-        }
+        // 使用缓存获取Agent数据，避免频繁API调用
+        const data = await getAgent(agentId);
+        setAgentData(data);
+        console.log(`🎯 AgentDetailSidebar 获取到Agent ${agentId} 数据:`, data);
       } catch (error) {
         console.error("Failed to fetch agent data:", error);
       }
@@ -82,7 +84,7 @@ export default function AgentDetailSidebar({
 
   // 渲染标签页内容
   const renderTabContent = () => {
-    console.log(agent, "agent.avatar_url");
+    console.log(agent,activeTab, "agent.avatar_url");
     
     switch (activeTab) {
       case 'details':
@@ -90,8 +92,8 @@ export default function AgentDetailSidebar({
           <div className="max-w-md mx-auto space-y-6">
             {/* Avatar and Basic Info */}
             <div className="text-center">
-              <div className="w-20 h-20 bg-gray-300 rounded-full mx-auto mb-4 flex items-center justify-center text-gray-600 text-sm">
-                <Image src={agent.avatar_url} fill alt="avatar"></Image>
+              <div className="w-20 h-20 bg-gray-300 rounded-full mx-auto mb-4 flex items-center justify-center relative overflow-hidden text-gray-600 text-sm">
+                <Image src={agent.avatar || '/default-avatar.png'} fill alt="avatar"></Image>
               </div>
               <h1 className="text-2xl font-bold mb-2">{agent.name}</h1>
             </div>
@@ -146,7 +148,7 @@ export default function AgentDetailSidebar({
             {/* Memory Section */}
             <div>
               <h3 className="font-medium text-gray-800 mb-3">Memory</h3>
-              <ScrollArea className="h-32 bg-gray-50 rounded-lg p-3">
+              <ScrollArea className="h-[200px] bg-gray-50 rounded-lg p-3">
                 {loadingThoughts ? (
                   <div className="text-sm text-gray-500 text-center py-4">
                     加载记忆中...

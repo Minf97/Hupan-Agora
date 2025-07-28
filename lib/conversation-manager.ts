@@ -2,28 +2,11 @@
 
 import { getAIService, ConversationMessage, ConversationResponse, SimpleAgent } from './ai-service';
 
-// 辅助函数：从数据库获取SimpleAgent信息
+// 辅助函数：从缓存获取SimpleAgent信息
 async function getSimpleAgent(agentId: number): Promise<SimpleAgent> {
-  try {
-    const response = await fetch(`/api/agents/${agentId}`);
-    if (response.ok) {
-      const agent = await response.json();
-      return {
-        id: agent.id,
-        name: agent.name,
-        bg: agent.bg
-      };
-    }
-  } catch (error) {
-    console.error(`获取Agent ${agentId} 信息失败:`, error);
-  }
-  
-  // 降级处理：返回默认信息
-  return {
-    id: agentId,
-    name: `Agent ${agentId}`,
-    bg: '一个普通的数字人'
-  };
+  // 使用缓存存储，避免频繁API调用
+  const useAgentCacheStore = (await import('./agent-cache-store')).default;
+  return useAgentCacheStore.getState().getAgent(agentId);
 }
 
 export interface ActiveConversation {

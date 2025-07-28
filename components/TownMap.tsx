@@ -1,14 +1,14 @@
 "use client";
 
 import { useRef, useEffect, useState } from "react";
-import { Stage, Layer, Rect, Circle, Text, Group, Ring } from "react-konva";
+import { Stage, Layer, Rect, Circle, Text, Group, Ring, Image as KonvaImage } from "react-konva";
 import Konva from "konva";
 import { MAP_CONFIG, Room, WallType } from "@/lib/map-config";
 import { useSocketManager } from "@/hooks/useSocketManager";
-import { activityLogService, ActivityLogWithId } from "@/lib/activity-logs";
 import AgentDetailSidebar from "@/components/AgentDetailSidebar";
+import useImage from "use-image";
 
-// 导入 ThoughtRecord 类型
+import useAgentCacheStore from "@/lib/agent-cache-store";
 import Image from "next/image";
 
 interface ThoughtRecord {
@@ -48,7 +48,161 @@ interface LogEntry {
   };
 }
 
-// 对话波纹动效组件
+// Agent头像组件
+interface AgentAvatarProps {
+  agent: any;
+  agentRef: (node: Konva.Circle | null) => void;
+  onClick: () => void;
+  onDragStart: () => void;
+  onDragMove: (newPos: { x: number; y: number }) => { x: number; y: number };
+  onDragEnd: (finalPos: { x: number; y: number }) => { x: number; y: number };
+  onMouseEnter: (e: any) => void;
+  onMouseLeave: (e: any) => void;
+  draggable: boolean;
+  draggingAgentId: number | null;
+}
+
+const AgentAvatar: React.FC<AgentAvatarProps> = ({
+  agent,
+  agentRef,
+  onClick,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+  onMouseEnter,
+  onMouseLeave,
+  draggable,
+  draggingAgentId,
+}) => {
+  const [image] = useImage(agent.avatar || '/default-avatar.png');
+
+  return (
+    <Group
+      x={agent.position.x}
+      y={agent.position.y}
+      onClick={onClick}
+      onTap={onClick}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragMove={(e) => {
+        const newPos = { x: e.target.x(), y: e.target.y() };
+        const validPos = onDragMove(newPos);
+        e.target.x(validPos.x);
+        e.target.y(validPos.y);
+      }}
+      onDragEnd={(e) => {
+        const finalPos = { x: e.target.x(), y: e.target.y() };
+        const validPos = onDragEnd(finalPos);
+        e.target.x(validPos.x);
+        e.target.y(validPos.y);
+      }}
+    >
+      {/* 头像图片 */}
+      {image ? (
+        <>
+          <KonvaImage
+            image={image}
+            x={-15}
+            y={-15}
+            width={30}
+            height={30}
+            cornerRadius={15}
+            shadowColor="black"
+            shadowBlur={agent.status === "walking" ? 4 : 0}
+            shadowOpacity={agent.status === "walking" ? 0.4 : 0}
+            shadowOffsetX={agent.status === "walking" ? 1 : 0}
+            shadowOffsetY={agent.status === "walking" ? 1 : 0}
+            scaleX={
+              agent.status === "talking"
+                ? 1.3
+                : draggingAgentId === agent.id
+                ? 1.15
+                : 1
+            }
+            scaleY={
+              agent.status === "talking"
+                ? 1.3
+                : draggingAgentId === agent.id
+                ? 1.15
+                : 1
+            }
+          />
+          {/* 用于位置追踪的隐藏Circle */}
+          <Circle
+            ref={agentRef}
+            x={0}
+            y={0}
+            radius={15}
+            fill="transparent"
+            visible={false}
+          />
+        </>
+      ) : (
+        // 加载中或没有头像时显示圆圈
+        <Circle
+          ref={agentRef}
+          x={0}
+          y={0}
+          radius={15}
+          fill={agent.color}
+          shadowColor="black"
+          shadowBlur={agent.status === "walking" ? 4 : 0}
+          shadowOpacity={agent.status === "walking" ? 0.4 : 0}
+          shadowOffsetX={agent.status === "walking" ? 1 : 0}
+          shadowOffsetY={agent.status === "walking" ? 1 : 0}
+          scaleX={
+            agent.status === "talking"
+              ? 1.3
+              : draggingAgentId === agent.id
+              ? 1.15
+              : 1
+          }
+          scaleY={
+            agent.status === "talking"
+              ? 1.3
+              : draggingAgentId === agent.id
+              ? 1.15
+              : 1
+          }
+        />
+      )}
+      
+      {/* 状态边框 */}
+      <Circle
+        x={0}
+        y={0}
+        radius={15}
+        fill="transparent"
+        stroke={
+          agent.status === "talking"
+            ? "#FFD700"
+            : draggingAgentId === agent.id
+            ? "#4CAF50"
+            : "transparent"
+        }
+        strokeWidth={
+          agent.status === "talking" || draggingAgentId === agent.id ? 2 : 0
+        }
+        scaleX={
+          agent.status === "talking"
+            ? 1.3
+            : draggingAgentId === agent.id
+            ? 1.15
+            : 1
+        }
+        scaleY={
+          agent.status === "talking"
+            ? 1.3
+            : draggingAgentId === agent.id
+            ? 1.15
+            : 1
+        }
+      />
+    </Group>
+  );
+};
 interface ConversationRippleProps {
   x: number;
   y: number;
@@ -153,53 +307,30 @@ export default function TownMap() {
   const [recentThoughts, setRecentThoughts] = useState<ThoughtRecord[]>([]);
   const [isLoadingThoughts, setIsLoadingThoughts] = useState(false);
 
-  // 日志状态管理
-  const [logs, setLogs] = useState<ActivityLogWithId[]>([]);
+  // 实时日志滚动引用
+  const realtimeLogsRef = useRef<HTMLDivElement>(null);
 
-  // 从数据库加载日志
-  const loadLogs = async () => {
-    try {
-      const dbLogs = await activityLogService.getLogs({ limit: 100 });
-      setLogs(dbLogs);
-    } catch (error) {
-      console.error("加载日志失败:", error);
-    }
-  };
+  const {
+    socket,
+    townTime,
+    agents,
+    agentCirclesRef,
+    agentTextsRef,
+    stopAgentAnimation,
+    activeConversations,
+    conversationMessages,
+    thoughtLogger,
+    setAgents,
+    realtimeLogs, // 使用来自useSocketManager的实时日志
+    addRealtimeLog // 使用来自useSocketManager的添加方法
+  } = useSocketManager();
 
-  // 添加日志记录函数（现在保存到数据库）
-  const addLog = async (entry: {
-    type: "conversation_start" | "conversation_end";
-    agentId: number;
-    agentName: string;
-    content: string;
-    targetAgentId?: number;
-    targetAgentName?: string;
-    conversationId?: string;
-  }) => {
-    try {
-      const newLog = await activityLogService.createLog({
-        type: entry.type,
-        agentId: entry.agentId,
-        agentName: entry.agentName,
-        content: entry.content,
-        targetAgentId: entry.targetAgentId,
-        targetAgentName: entry.targetAgentName,
-        metadata: entry.conversationId
-          ? { conversationId: entry.conversationId }
-          : undefined,
-      });
-
-      // 更新本地状态，保持最新的100条记录
-      setLogs((prev) => [newLog, ...prev].slice(0, 100));
-    } catch (error) {
-      console.error("保存日志失败:", error);
-    }
-  };
-
-  // 组件挂载时加载日志
+  // 自动滚动到最新日志
   useEffect(() => {
-    loadLogs();
-  }, []);
+    if (realtimeLogsRef.current && realtimeLogs.length > 0) {
+      realtimeLogsRef.current.scrollTop = 0; // 滚动到顶部（最新消息）
+    }
+  }, [realtimeLogs]);
 
   const [stageScale, setStageScale] = useState(1);
   const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 });
@@ -211,24 +342,29 @@ export default function TownMap() {
   const MIN_SCALE = 0.5;
   const MAX_SCALE = 3;
 
-  const {
-    socket,
-    townTime,
-    agents,
-    agentCirclesRef,
-    agentTextsRef,
-    stopAgentAnimation,
-    activeConversations,
-    setAgents,
-  } = useSocketManager();
+  const { preloadAgents } = useAgentCacheStore();
+
+ 
+
+  // 预加载所有Agent缓存
+  useEffect(() => {
+    if (agents.length > 0) {
+      const agentIds = agents.map(agent => agent.id);
+      console.log(`🚀 预加载 ${agentIds.length} 个Agent缓存:`, agentIds);
+      preloadAgents(agentIds);
+    }
+  }, [agents, preloadAgents]);
 
   // 监听agents状态变化并记录日志（只记录交谈相关状态）
   const prevAgentsRef = useRef<typeof agents>([]);
   const recordedConversationsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    console.log(`🔍 agents状态变化检查: 当前${agents.length}个agents, 之前${prevAgentsRef.current.length}个`);
+    
     if (prevAgentsRef.current.length === 0) {
       prevAgentsRef.current = agents;
+      console.log(`🏁 首次初始化agents状态`);
       return;
     }
 
@@ -239,6 +375,8 @@ export default function TownMap() {
       agents.forEach((agent) => {
         const prevAgent = prevAgentsRef.current.find((a) => a.id === agent.id);
         if (prevAgent && prevAgent.status !== agent.status) {
+          console.log(`👤 Agent ${agent.name} 状态变化: ${prevAgent.status} → ${agent.status}`);
+          
           // 记录进入交谈状态
           if (agent.status === "talking" && agent.talkingWith) {
             const targetAgent = agents.find((a) => a.id === agent.talkingWith);
@@ -250,19 +388,7 @@ export default function TownMap() {
             // 避免重复记录同一个对话
             if (!recordedConversationsRef.current.has(conversationKey)) {
               recordedConversationsRef.current.add(conversationKey);
-              promises.push(
-                addLog({
-                  type: "conversation_start",
-                  agentId: agent.id,
-                  agentName: agent.name,
-                  content: `${agent.name} 开始与 ${
-                    targetAgent?.name || "Unknown"
-                  } 交谈`,
-                  targetAgentId: agent.talkingWith,
-                  targetAgentName: targetAgent?.name,
-                  conversationId: conversationKey,
-                })
-              );
+              // 对话开始不再需要单独记录，实时日志会显示对话内容
             }
           }
           // 记录退出交谈状态
@@ -277,19 +403,7 @@ export default function TownMap() {
 
             // 移除记录的对话，允许下次重新记录
             recordedConversationsRef.current.delete(conversationKey);
-            promises.push(
-              addLog({
-                type: "conversation_end",
-                agentId: agent.id,
-                agentName: agent.name,
-                content: `${agent.name} 结束与 ${
-                  targetAgent?.name || "Unknown"
-                } 的交谈`,
-                targetAgentId: prevAgent.talkingWith,
-                targetAgentName: targetAgent?.name,
-                conversationId: conversationKey,
-              })
-            );
+            // 对话结束不再需要单独记录，实时日志会显示对话内容
           }
         }
       });
@@ -307,6 +421,49 @@ export default function TownMap() {
     handleStatusChanges();
     prevAgentsRef.current = agents;
   }, [agents]);
+
+  // 监听思考记录并添加到实时日志  
+  useEffect(() => {
+    if (!thoughtLogger) return;
+
+    // 覆盖 thoughtLogger 的方法来拦截思考记录
+    const originalAddInnerThought = thoughtLogger.addInnerThought;
+    const originalAddDecision = thoughtLogger.addDecision;
+    const originalAddConversation = thoughtLogger.addConversation;
+
+    thoughtLogger.addInnerThought = (agentId: number, agentName: string, content: string, metadata?: any) => {
+      // 添加到实时日志
+      addRealtimeLog({
+        type: 'inner_thought',
+        agentName,
+        content: `💭 ${content}`,
+        emotion: metadata?.emotion,
+      });
+      
+      // 调用原始方法
+      return originalAddInnerThought.call(thoughtLogger, agentId, agentName, content, metadata);
+    };
+
+    thoughtLogger.addDecision = (agentId: number, agentName: string, content: string, metadata?: any) => {
+      // 添加到实时日志
+      addRealtimeLog({
+        type: 'decision',
+        agentName,
+        content: `🤔 决定：${content}`,
+        emotion: metadata?.emotion,
+      });
+      
+      // 调用原始方法
+      return originalAddDecision.call(thoughtLogger, agentId, agentName, content, metadata);
+    };
+
+    // 清理函数：恢复原始方法
+    return () => {
+      thoughtLogger.addInnerThought = originalAddInnerThought;
+      thoughtLogger.addDecision = originalAddDecision;
+      thoughtLogger.addConversation = originalAddConversation;
+    };
+  }, [thoughtLogger]);
 
   // 监听对话事件（移除，避免重复记录）
   // useEffect(() => {
@@ -390,6 +547,8 @@ export default function TownMap() {
 
   // 处理代理点击事件
   const handleAgentClick = (agentId: number) => {
+    console.log(agentId, "agentId", selectedAgentId);
+    
     setSelectedAgentId(agentId);
   };
 
@@ -967,51 +1126,33 @@ export default function TownMap() {
                       layer={layerRef.current}
                     />
 
-                    <Circle
-                      ref={(node) => {
+                    <AgentAvatar
+                      agent={agent}
+                      agentRef={(node) => {
                         if (node) agentCirclesRef.current[agent.id] = node;
                       }}
-                      x={agent.position.x}
-                      y={agent.position.y}
-                      radius={15}
-                      fill={agent.color}
-                      shadowColor="black"
-                      shadowBlur={agent.status === "walking" ? 4 : 0}
-                      shadowOpacity={agent.status === "walking" ? 0.4 : 0}
-                      // 添加移动动效
-                      shadowOffsetX={agent.status === "walking" ? 1 : 0}
-                      shadowOffsetY={agent.status === "walking" ? 1 : 0}
-                      // 对话状态效果和拖拽状态效果
-                      stroke={
-                        agent.status === "talking"
-                          ? "#FFD700"
-                          : draggingAgentId === agent.id
-                          ? "#4CAF50"
-                          : "transparent"
-                      }
-                      strokeWidth={
-                        agent.status === "talking" ||
-                        draggingAgentId === agent.id
-                          ? 2
-                          : 0
-                      }
-                      scale={
-                        agent.status === "talking"
-                          ? { x: 1.3, y: 1.3 }
-                          : draggingAgentId === agent.id
-                          ? { x: 1.15, y: 1.15 }
-                          : { x: 1, y: 1 }
-                      }
-                      // 添加点击事件
                       onClick={() => handleAgentClick(agent.id)}
-                      onTap={() => handleAgentClick(agent.id)}
-                      // 鼠标悬停效果
+                      onDragStart={() => {
+                        handleAgentDragStart(agent.id);
+                        const container = stageRef.current?.container();
+                        if (container) {
+                          container.style.cursor = "grabbing";
+                        }
+                      }}
+                      onDragMove={(newPos) => handleAgentDragMove(agent.id, newPos)}
+                      onDragEnd={(finalPos) => {
+                        const validPos = handleAgentDragEnd(agent.id, finalPos);
+                        const container = stageRef.current?.container();
+                        if (container) {
+                          container.style.cursor = "grab";
+                        }
+                        return validPos;
+                      }}
                       onMouseEnter={(e) => {
                         const container = e.target.getStage()?.container();
                         if (
                           container &&
-                          (agent.status === "idle" ||
-                            agent.status === "walking")
+                          (agent.status === "idle" || agent.status === "walking")
                         ) {
                           container.style.cursor = "grab";
                         }
@@ -1022,41 +1163,12 @@ export default function TownMap() {
                           container.style.cursor = "default";
                         }
                       }}
-                      // 拖拽功能（空闲和行走状态可以拖拽，对话中不可以）
                       draggable={
                         agent.status === "idle" || agent.status === "walking"
                       }
-                      onDragStart={() => {
-                        handleAgentDragStart(agent.id);
-                        // 改变鼠标样式
-                        const container = stageRef.current?.container();
-                        if (container) {
-                          container.style.cursor = "grabbing";
-                        }
-                      }}
-                      onDragMove={(e) => {
-                        const newPos = { x: e.target.x(), y: e.target.y() };
-                        const validPos = handleAgentDragMove(agent.id, newPos);
-
-                        // 设置有效位置
-                        e.target.x(validPos.x);
-                        e.target.y(validPos.y);
-                      }}
-                      onDragEnd={(e) => {
-                        const finalPos = { x: e.target.x(), y: e.target.y() };
-                        const validPos = handleAgentDragEnd(agent.id, finalPos);
-
-                        // 确保最终位置有效
-                        e.target.x(validPos.x);
-                        e.target.y(validPos.y);
-
-                        // 恢复鼠标样式
-                        const container = stageRef.current?.container();
-                        if (container) {
-                          container.style.cursor = "grab";
-                        }
-                      }}
+                      draggingAgentId={draggingAgentId}
                     />
+                    
                     <Text
                       ref={(node) => {
                         if (node) agentTextsRef.current[agent.id] = node;
@@ -1079,8 +1191,9 @@ export default function TownMap() {
           </div>
         </div>
 
-        {/* 侧边栏 */}
-        <div className="w-[29vw] absolute right-0 top-0 bg-white shadow-lg rounded-lg p-4 flex flex-col h-[100vh]">
+        {/* 侧边栏 - 当AgentDetailSidebar显示时隐藏 */}
+        {!selectedAgentId && (
+        <div className="w-[29vw] z-10 absolute right-0 top-0 bg-white shadow-lg rounded-lg p-4 flex flex-col h-[100vh]">
           {/* Agents 状态列表 */}
           <div className="mb-4">
             <h3 className="text-lg font-semibold mb-3 text-gray-800">
@@ -1146,25 +1259,47 @@ export default function TownMap() {
 
           {/* 实时日志 */}
           <div className="flex-1 flex flex-col min-h-0">
-            <h3 className="text-lg font-semibold mb-3 text-gray-800">
-              实时日志
-            </h3>
-            <div className="flex-1 overflow-y-auto space-y-2">
-              {logs.length === 0 ? (
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-lg font-semibold text-gray-800">
+                实时日志
+              </h3>
+              {/* <div className="flex gap-2">
+                <button
+                  className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                >
+                  对话
+                </button>
+                <button
+                  className="px-2 py-1 text-xs bg-purple-500 text-white rounded hover:bg-purple-600"
+                >
+                  内心想法
+                </button>
+                <button
+                  className="px-2 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600"
+                >
+                  决策
+                </button>
+              </div> */}
+            </div>
+            <div 
+              ref={realtimeLogsRef}
+              className="flex-1 overflow-auto space-y-2 pr-2" 
+            >
+              {realtimeLogs.length === 0 ? (
                 <div className="text-sm text-gray-500 text-center py-8">
-                  暂无日志记录...
+                  暂无实时活动记录...
                 </div>
               ) : (
-                logs.map((log) => (
+                realtimeLogs.map((log) => (
                   <div
                     key={log.id}
                     className={`p-3 rounded-lg border-l-4 text-sm ${
-                      log.type === "conversation_start"
-                        ? "bg-green-50 border-green-400"
-                        : log.type === "conversation_end"
-                        ? "bg-red-50 border-red-400"
-                        : log.type === "conversation_message"
-                        ? "bg-yellow-50 border-yellow-400"
+                      log.type === "conversation"
+                        ? "bg-blue-50 border-blue-400"
+                        : log.type === "inner_thought"
+                        ? "bg-purple-50 border-purple-400"
+                        : log.type === "decision"
+                        ? "bg-orange-50 border-orange-400"
                         : "bg-gray-50 border-gray-400"
                     }`}
                   >
@@ -1173,16 +1308,22 @@ export default function TownMap() {
                         {log.agentName}
                       </span>
                       <span className="text-xs text-gray-500">
-                        {new Date(log.createdAt).toLocaleTimeString()}
+                        {new Date(log.timestamp).toLocaleTimeString()}
                       </span>
                     </div>
                     <div className="text-gray-600">{log.content}</div>
+                    {log.emotion && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        情绪: {log.emotion}
+                      </div>
+                    )}
                   </div>
                 ))
               )}
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Agent详情右侧栏 */}
@@ -1190,7 +1331,6 @@ export default function TownMap() {
         <AgentDetailSidebar
           agentId={selectedAgentId}
           onClose={handleCloseAgentInfo}
-          agents={agents}
         />
       )}
     </div>

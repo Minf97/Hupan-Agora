@@ -1,6 +1,7 @@
 name = "hackthon-x-websocket"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
 
 [vars]
 FRONTEND_URL = "http://localhost:3000"
@@ -12,6 +13,11 @@ enabled = false
 [[durable_objects.bindings]]
 name = "WEBSOCKET_SESSIONS"
 class_name = "WebSocketSession"
+
+# Durable Objects migrations
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WebSocketSession"]
 
 # Environment variables (set via wrangler secret)
 # DATABASE_URL = "postgresql://..." (use: wrangler secret put DATABASE_URL)

@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { X, User, Briefcase, Heart, MessageCircle, Clock, Smile, History } from 'lucide-react';
-import { getAgentPersonality, type AgentPersonality } from '@/lib/agent-personality';
+import { getAgentPersonalityFromDB } from '@/lib/agent-database';
+import { type AgentPersonality } from '@/lib/agent-personality';
 import { useAgentStore } from '@/store/agents';
 import { ConversationHistory } from '@/components/ConversationHistory';
 
@@ -76,59 +77,98 @@ export function AgentInfoPanel({
   const [currentConversation, setCurrentConversation] = useState<any>(null);
   const [conversationHistory, setConversationHistory] = useState<any[]>([]);
   const [showFullHistory, setShowFullHistory] = useState(false);
+  const [loading, setLoading] = useState(false);
   const { getAgentById } = useAgentStore();
 
   useEffect(() => {
     if (agentId) {
-      // 获取代理的个性信息
-      const agentPersonality = getAgentPersonality(agentId);
-      setPersonality(agentPersonality);
-
-      // 检查代理是否在对话中
-      const conversation = Array.from(activeConversations.values()).find(
-        (conv: any) => conv.agent1Id === agentId || conv.agent2Id === agentId
-      );
-      setCurrentConversation(conversation);
-
-      // 获取相关的对话历史
-      if (conversation) {
-        console.log('🔍 检查对话历史:', {
-          conversationId: conversation.id,
-          agent1Name: conversation.agent1Name,
-          agent2Name: conversation.agent2Name,
-          totalMessages: conversationMessages.length,
-          agentPersonalityName: agentPersonality.name
-        });
-        
-        const relatedMessages = conversationMessages.filter(msg => {
-          const isFromCurrentAgent = msg.speaker === agentPersonality.name;
-          const isFromConversationPartner = msg.speaker === (conversation.agent1Id === agentId ? conversation.agent2Name : conversation.agent1Name);
+      // 异步获取代理的个性信息
+      const fetchAgentPersonality = async () => {
+        setLoading(true);
+        try {
+          console.log(`🔍 开始从数据库获取Agent ${agentId} 个性信息`);
+          const agentPersonality = await getAgentPersonalityFromDB(agentId);
+          setPersonality(agentPersonality);
+          console.log(`✅ 成功获取Agent ${agentId} 个性信息:`, agentPersonality);
           
-          console.log('🔍 检查消息:', {
-            speaker: msg.speaker,
-            content: msg.content.substring(0, 30),
-            isFromCurrentAgent,
-            isFromConversationPartner,
-            included: isFromCurrentAgent || isFromConversationPartner
-          });
+          // 获取个性信息成功后，处理对话历史
+          const conversation = Array.from(activeConversations.values()).find(
+            (conv: any) => conv.agent1Id === agentId || conv.agent2Id === agentId
+          );
+          setCurrentConversation(conversation);
+
+          if (conversation) {
+            console.log('🔍 检查对话历史:', {
+              conversationId: conversation.id,
+              agent1Name: conversation.agent1Name,
+              agent2Name: conversation.agent2Name,
+              totalMessages: conversationMessages.length,
+              agentPersonalityName: agentPersonality.name
+            });
+            
+            const relatedMessages = conversationMessages.filter(msg => {
+              const isFromCurrentAgent = msg.speaker === agentPersonality.name;
+              const isFromConversationPartner = msg.speaker === (conversation.agent1Id === agentId ? conversation.agent2Name : conversation.agent1Name);
+              return isFromCurrentAgent || isFromConversationPartner;
+            });
+            
+            console.log('✅ 过滤后的相关消息数量:', relatedMessages.length);
+            setConversationHistory(relatedMessages.slice(-20));
+          } else {
+            // 没有当前对话时，显示该代理的所有历史消息
+            const agentMessages = conversationMessages.filter(msg => 
+              msg.speaker === agentPersonality.name
+            );
+            setConversationHistory(agentMessages.slice(-20));
+          }
           
-          return isFromCurrentAgent || isFromConversationPartner;
-        });
-        
-        console.log('✅ 过滤后的相关消息数量:', relatedMessages.length);
-        setConversationHistory(relatedMessages.slice(-20)); // 最近20条消息
-      } else {
-        // 没有当前对话时，显示该代理的所有历史消息
-        const agentMessages = conversationMessages.filter(msg => 
-          msg.speaker === agentPersonality.name
-        );
-        setConversationHistory(agentMessages.slice(-20));
-      }
+        } catch (error) {
+          console.error(`❌ 获取Agent ${agentId} 个性信息失败:`, error);
+          setPersonality(null);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchAgentPersonality();
+    } else {
+      // 清理状态
+      setPersonality(null);
+      setCurrentConversation(null);
+      setConversationHistory([]);
     }
   }, [agentId, activeConversations, conversationMessages]);
 
-  if (!agentId || !personality) {
+  // 加载状态或无数据时的处理
+  if (!agentId) {
     return null;
+  }
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <Card className="w-full max-w-2xl bg-white p-8">
+          <div className="flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            <span className="ml-3 text-lg">正在从数据库加载Agent信息...</span>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!personality) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <Card className="w-full max-w-2xl bg-white p-8">
+          <div className="text-center">
+            <p className="text-lg text-red-500">❌ 无法从数据库加载Agent信息</p>
+            <p className="text-sm text-gray-500 mt-2">请检查网络连接或稍后重试</p>
+            <Button onClick={onClose} className="mt-4">关闭</Button>
+          </div>
+        </Card>
+      </div>
+    );
   }
 
   const agent = getAgentById(agentId);

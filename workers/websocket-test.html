@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket 测试 - Cloudflare Workers</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.connecting { background: #fff3cd; color: #856404; }
+        .status.connected { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.closed { background: #e2e3e5; color: #383d41; }
+        
+        .messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            background: #f8f9fa;
+            font-family: monospace;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        .message.sent { background: #e3f2fd; }
+        .message.received { background: #f3e5f5; }
+        .message.system { background: #fff8e1; }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        
+        input[type="text"] {
+            width: 300px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 WebSocket 测试工具</h1>
+        <p>连接到 Cloudflare Workers WebSocket: <code>ws://localhost:8787/ws</code></p>
+        
+        <div id="status" class="status connecting">连接中...</div>
+        
+        <div>
+            <button onclick="connect()">连接</button>
+            <button onclick="disconnect()">断开连接</button>
+            <button onclick="testHealthCheck()">测试健康检查</button>
+        </div>
+        
+        <div>
+            <h3>📩 发送消息</h3>
+            <input type="text" id="messageInput" placeholder="输入自定义消息..." />
+            <button onclick="sendCustomMessage()">发送消息</button>
+            <br>
+            <button onclick="sendAgentUpdate()">发送代理更新</button>
+            <button onclick="sendTaskComplete()">发送任务完成</button>
+            <button onclick="sendPing()">发送 Ping</button>
+        </div>
+        
+        <div>
+            <h3>📨 消息日志</h3>
+            <div id="messages" class="messages"></div>
+            <button onclick="clearMessages()">清空日志</button>
+        </div>
+        
+        <div>
+            <h3>📊 统计信息</h3>
+            <p>发送消息数: <span id="sentCount">0</span></p>
+            <p>接收消息数: <span id="receivedCount">0</span></p>
+            <p>连接时间: <span id="connectionTime">未连接</span></p>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let sentCount = 0;
+        let receivedCount = 0;
+        let connectTime = null;
+
+        function updateStatus(message, className) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${className}`;
+        }
+
+        function addMessage(content, type = 'system') {
+            const messagesEl = document.getElementById('messages');
+            const messageEl = document.createElement('div');
+            messageEl.className = `message ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            messageEl.innerHTML = `<strong>[${timestamp}]</strong> ${content}`;
+            messagesEl.appendChild(messageEl);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function updateStats() {
+            document.getElementById('sentCount').textContent = sentCount;
+            document.getElementById('receivedCount').textContent = receivedCount;
+            
+            if (connectTime) {
+                const duration = Math.floor((Date.now() - connectTime) / 1000);
+                document.getElementById('connectionTime').textContent = `${duration} 秒`;
+            }
+        }
+
+        function connect() {
+            disconnect(); // 确保之前的连接已关闭
+            
+            const wsUrl = 'ws://localhost:8787/ws';
+            addMessage(`尝试连接到: ${wsUrl}`, 'system');
+            updateStatus('连接中...', 'connecting');
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function() {
+                connectTime = Date.now();
+                updateStatus('✅ 已连接', 'connected');
+                addMessage('WebSocket 连接成功！', 'system');
+                updateStats();
+            };
+            
+            ws.onmessage = function(event) {
+                receivedCount++;
+                try {
+                    const data = JSON.parse(event.data);
+                    addMessage(`收到: ${JSON.stringify(data, null, 2)}`, 'received');
+                } catch (e) {
+                    addMessage(`收到 (原始): ${event.data}`, 'received');
+                }
+                updateStats();
+            };
+            
+            ws.onclose = function(event) {
+                connectTime = null;
+                updateStatus(`连接已关闭 (代码: ${event.code})`, 'closed');
+                addMessage(`连接关闭: ${event.code} - ${event.reason || '无原因'}`, 'system');
+                updateStats();
+            };
+            
+            ws.onerror = function(error) {
+                updateStatus('❌ 连接错误', 'error');
+                addMessage(`连接错误: ${error}`, 'system');
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function sendMessage(message) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(message));
+                sentCount++;
+                addMessage(`发送: ${JSON.stringify(message, null, 2)}`, 'sent');
+                updateStats();
+            } else {
+                addMessage('❌ WebSocket 未连接，无法发送消息', 'system');
+            }
+        }
+
+        function sendCustomMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+            if (!text) return;
+            
+            try {
+                const message = JSON.parse(text);
+                sendMessage(message);
+            } catch (e) {
+                sendMessage({ type: 'custom', payload: { message: text } });
+            }
+            input.value = '';
+        }
+
+        function sendAgentUpdate() {
+            sendMessage({
+                type: 'agentUpdate',
+                payload: {
+                    agentId: 1,
+                    status: 'moving',
+                    position: { x: Math.floor(Math.random() * 100), y: Math.floor(Math.random() * 100) }
+                }
+            });
+        }
+
+        function sendTaskComplete() {
+            sendMessage({
+                type: 'task_complete',
+                payload: {
+                    agentId: 1,
+                    status: 'idle',
+                    position: { x: Math.floor(Math.random() * 100), y: Math.floor(Math.random() * 100) }
+                }
+            });
+        }
+
+        function sendPing() {
+            sendMessage({
+                type: 'ping',
+                payload: { timestamp: Date.now() }
+            });
+        }
+
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+        }
+
+        async function testHealthCheck() {
+            try {
+                const response = await fetch('http://localhost:8787/health');
+                const data = await response.json();
+                addMessage(`健康检查成功: ${JSON.stringify(data, null, 2)}`, 'system');
+            } catch (error) {
+                addMessage(`健康检查失败: ${error.message}`, 'system');
+            }
+        }
+
+        // 页面加载时自动连接
+        window.onload = function() {
+            connect();
+            
+            // 定期更新统计信息
+            setInterval(updateStats, 1000);
+        };
+
+        // 页面关闭时断开连接
+        window.onbeforeunload = function() {
+            disconnect();
+        };
+
+        // 回车发送消息
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendCustomMessage();
+            }
+        });
+    </script>
+</body>
+</html>

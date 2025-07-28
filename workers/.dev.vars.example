@@ -1,0 +1,15 @@
+# .dev.vars.example - 环境变量示例文件
+# 复制为 .dev.vars 并填入你的实际值
+
+# Supabase 数据库连接字符串
+# 从 Supabase 项目设置 -> Database -> Connection string 获取
+# 格式: postgresql://postgres:[PASSWORD]@[HOST]:[PORT]/[DATABASE]?sslmode=require
+DATABASE_URL="postgresql://postgres:your-password@db.your-project.supabase.co:5432/postgres?sslmode=require"
+
+# OpenAI API Key (可选)
+# 用于生成更智能的 AI 对话，如果不设置将使用简单回复
+OPENAI_API_KEY="sk-your-openai-api-key-here"
+
+# 前端应用地址
+# 本地开发时使用 localhost:3000，生产环境使用你的域名
+FRONTEND_URL="http://localhost:3000"
