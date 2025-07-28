@@ -83,10 +83,12 @@ class CloudflareSocket {
         if (this.url.startsWith("ws://") || this.url.startsWith("wss://")) {
           wsUrl = this.url;
         } else {
-          wsUrl = this.url.replace(
-            /^https?:\/\//,
-            this.url.startsWith("https://") ? "wss://" : "ws://"
-          ) + "/ws";
+          // 正确的协议转换：HTTPS -> WSS, HTTP -> WS
+          const protocol = this.url.startsWith("https://") ? "wss://" : "ws://";
+          wsUrl = this.url.replace(/^https?:\/\//, protocol);
+          if (!wsUrl.endsWith("/ws")) {
+            wsUrl += "/ws";
+          }
         }
 
         console.log(`🔌 [尝试 ${connectionAttempts}] 连接 WebSocket: ${wsUrl} (${this.connectionId})`);

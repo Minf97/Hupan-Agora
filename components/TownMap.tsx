@@ -128,6 +128,8 @@ const AgentAvatar: React.FC<AgentAvatarProps> = ({
                 ? 1.15
                 : 1
             }
+            onClick={onClick}
+            onTap={onClick}
           />
           {/* 用于位置追踪的隐藏Circle */}
           <Circle
@@ -166,6 +168,8 @@ const AgentAvatar: React.FC<AgentAvatarProps> = ({
               ? 1.15
               : 1
           }
+          onClick={onClick}
+          onTap={onClick}
         />
       )}
       
