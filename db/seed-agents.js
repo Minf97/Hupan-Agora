@@ -33,10 +33,10 @@ async function seedAgents() {
 
     const sampleAgents = [
       {
-        name: '张三',
+        name: 'Mike',
         personality: '开朗活泼的AI助手',
         description: '一个友善的AI角色，喜欢帮助他人',
-        backstory: '张三是一个充满活力的AI，总是乐于助人。',
+        backstory: 'Mike是一个充满活力的AI，总是乐于助人。',
         goals: '帮助用户解决问题，创造友好的互动体验',
         x: '5',
         y: '5',
@@ -44,10 +44,10 @@ async function seedAgents() {
         status: 'idle'
       },
       {
-        name: '李四',
+        name: 'Cassin',
         personality: '冷静理性的AI分析师',
         description: '擅长逻辑思考和数据分析的AI角色',
-        backstory: '李四是一个善于分析的AI，喜欢深入思考问题。',
+        backstory: 'Cassin是一个善于分析的AI，喜欢深入思考问题。',
         goals: '提供准确的分析和建议',
         x: '15',
         y: '10',
@@ -55,10 +55,32 @@ async function seedAgents() {
         status: 'idle'
       },
       {
-        name: '王五',
+        name: 'Dax',
         personality: '创意无限的AI艺术家',
         description: '富有创造力的AI角色，喜欢艺术和设计',
-        backstory: '王五是一个充满想象力的AI，热爱创作和美学。',
+        backstory: 'Dax是一个充满想象力的AI，热爱创作和美学。',
+        goals: '激发创意，创造美好的艺术作品',
+        x: '8',
+        y: '18',
+        color: '#33FF57',
+        status: 'idle'
+      },
+      {
+        name: 'Roland',
+        personality: '冷静理性的AI分析师',
+        description: '擅长逻辑思考和数据分析的AI角色',
+        backstory: 'Roland是一个善于分析的AI，喜欢深入思考问题。',
+        goals: '提供准确的分析和建议',
+        x: '15',
+        y: '10',
+        color: '#33A1FF',
+        status: 'idle'
+      },
+      {
+        name: 'Sue',
+        personality: '创意无限的AI艺术家',
+        description: '富有创造力的AI角色，喜欢艺术和设计',
+        backstory: 'Sue是一个充满想象力的AI，热爱创作和美学。',
         goals: '激发创意，创造美好的艺术作品',
         x: '8',
         y: '18',

@@ -80,15 +80,20 @@ export async function GET(request: NextRequest) {
       conditions.push(eq(activityLogs.type, type as any));
     }
 
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
-
     // 添加排序、限制和偏移
-    const results = await query
-      .orderBy(desc(activityLogs.createdAt))
-      .limit(limit)
-      .offset(offset);
+    let results;
+    if (conditions.length > 0) {
+      results = await db.select().from(activityLogs)
+        .where(and(...conditions))
+        .orderBy(desc(activityLogs.createdAt))
+        .limit(limit)
+        .offset(offset);
+    } else {
+      results = await query
+        .orderBy(desc(activityLogs.createdAt))
+        .limit(limit)
+        .offset(offset);
+    }
 
     return NextResponse.json(results);
   } catch (error) {

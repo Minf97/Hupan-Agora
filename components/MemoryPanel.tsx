@@ -199,7 +199,7 @@ export function MemoryPanel({ agentId, className }: MemoryPanelProps) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={loadMemories}
+            onClick={() => loadMemories()}
             disabled={isLoading}
             className="h-6 w-6 p-0"
           >
@@ -317,7 +317,7 @@ export function MemoryPanel({ agentId, className }: MemoryPanelProps) {
                         </div>
                       </div>
                       <div className="flex items-center space-x-1">
-                        {'similarity' in memory && (
+                        {'similarity' in memory && memory.similarity !== undefined && (
                           <span className="text-xs text-green-600">
                             {Math.round(memory.similarity * 100)}%
                           </span>

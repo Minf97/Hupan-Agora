@@ -6,10 +6,11 @@ import { getThoughtsByAgent, clearThoughtsByAgent } from '@/lib/thoughts-service
 // GET /api/thoughts/agent/[agentId] - 获取指定代理的思考记录
 export async function GET(
   request: NextRequest,
-  { params }: { params: { agentId: string } }
+  { params }: { params: Promise<{ agentId: string }> }
 ) {
   try {
-    const agentId = parseInt(params.agentId);
+    const { agentId: paramAgentId } = await params;
+    const agentId = parseInt(paramAgentId);
     if (isNaN(agentId)) {
       return NextResponse.json(
         { success: false, error: '无效的代理ID' },
@@ -38,10 +39,11 @@ export async function GET(
 // DELETE /api/thoughts/agent/[agentId] - 清空指定代理的思考记录
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { agentId: string } }
+  { params }: { params: Promise<{ agentId: string }> }
 ) {
   try {
-    const agentId = parseInt(params.agentId);
+    const { agentId: paramAgentId } = await params;
+    const agentId = parseInt(paramAgentId);
     if (isNaN(agentId)) {
       return NextResponse.json(
         { success: false, error: '无效的代理ID' },

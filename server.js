@@ -71,9 +71,11 @@ async function loadAgentsFromDatabase() {
     console.error('加载agents失败:', error);
     // 如果数据库加载失败，使用默认数据
     agentStates = [
-      { id: 1, name: '张三', x: 5, y: 5, color: '#FF5733', status: 'idle' },
-      { id: 2, name: '李四', x: 15, y: 10, color: '#33A1FF', status: 'idle' },
-      { id: 3, name: '王五', x: 8, y: 18, color: '#33FF57', status: 'idle' },
+      { id: 1, name: 'Mike', x: 5, y: 5, color: '#FF5733', status: 'idle' },
+      { id: 2, name: 'Cassin', x: 15, y: 10, color: '#33A1FF', status: 'idle' },
+      { id: 3, name: 'Dax', x: 40, y: 18, color: '#33FF57', status: 'idle' },
+      { id: 4, name: 'Roland', x: 89, y: 18, color: '#33FF57', status: 'idle' },
+      { id: 5, name: 'Sue', x: 58, y: 18, color: '#33FF57', status: 'idle' },
     ];
     console.log('使用默认agents数据');
   }
@@ -430,8 +432,8 @@ function endConversation(conversationId) {
 
 // 定义地图配置（与前端保持一致）
 const MAP_CONFIG = {
-  width: 1200,
-  height: 900,
+  width: 800,
+  height: 800,
   gridSize: 20,
   obstacles: [
     { x: 100, y: 50, width: 200, height: 100 },
@@ -742,9 +744,12 @@ async function generateMessageForAgent(personality, messageIndex) {
 function getAgentPersonalityForServer(agentId) {
   // 简化的个性数据，实际应该从数据库获取
   const personalities = {
-    1: { name: '张三', interests: ['编程', '技术', '游戏'] },
-    2: { name: '李四', interests: ['旅行', '美食', '运动'] },
-    3: { name: '王五', interests: ['设计', '艺术', '音乐'] }
+    1: { name: 'Mike', interests: ['编程', '技术', '游戏'] },
+    2: { name: 'Cassin', interests: ['旅行', '美食', '运动'] },
+    3: { name: 'Dax', interests: ['设计', '艺术', '音乐'] },
+    4: { name: 'Roland', interests: ['旅行', '美食', '运动'] },
+    5: { name: 'Sue', interests: ['设计', '艺术', '音乐'] },
+    
   };
 
   return personalities[agentId] || {

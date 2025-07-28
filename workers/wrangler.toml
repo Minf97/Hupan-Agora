@@ -1,0 +1,19 @@
+name = "hackthon-x-websocket"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[vars]
+FRONTEND_URL = "http://localhost:3000"
+
+[observability.logs]
+enabled = false
+
+# Durable Objects for WebSocket sessions
+[[durable_objects.bindings]]
+name = "WEBSOCKET_SESSIONS"
+class_name = "WebSocketSession"
+
+# Environment variables (set via wrangler secret)
+# DATABASE_URL = "postgresql://..." (use: wrangler secret put DATABASE_URL)
+# OPENAI_API_KEY = "sk-..." (use: wrangler secret put OPENAI_API_KEY)
+

@@ -128,21 +128,35 @@ export async function processAgentEncounter(
     // 并行处理两个agent的内心思考
     const [agent1Thoughts, agent2Thoughts] = await Promise.all([
       aiService.generateInnerThought({
-        agent: agent1Personality,
-        encounteredAgent: agent2Personality,
+        agent: {
+          id: agent1Id,
+          name: agent1Personality.name,
+          bg: agent1Personality.background
+        },
+        encounteredAgent: {
+          id: agent2Id,
+          name: agent2Personality.name,
+          bg: agent2Personality.background
+        },
         context: {
           location: context.location,
           timeOfDay: context.townTime.hour,
-          recentMemories: agent1Personality.memories.slice(-5)
         }
       }),
       aiService.generateInnerThought({
-        agent: agent2Personality,
-        encounteredAgent: agent1Personality,
+        agent: {
+          id: agent2Id,
+          name: agent2Personality.name,
+          bg: agent2Personality.background
+        },
+        encounteredAgent: {
+          id: agent1Id,
+          name: agent1Personality.name,
+          bg: agent1Personality.background
+        },
         context: {
           location: context.location,
           timeOfDay: context.townTime.hour,
-          recentMemories: agent2Personality.memories.slice(-5)
         }
       })
     ]);

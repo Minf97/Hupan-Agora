@@ -213,15 +213,12 @@ export default function TownMap() {
 
   const {
     socket,
-    connectionStatus,
     townTime,
-    realTimeSeconds,
     agents,
     agentCirclesRef,
     agentTextsRef,
     stopAgentAnimation,
     activeConversations,
-    thoughtLogger,
     setAgents,
   } = useSocketManager();
 
@@ -676,8 +673,8 @@ export default function TownMap() {
     // 同步更新文本位置
     const agentText = agentTextsRef.current[agentId];
     if (agentText) {
-      agentText.x(validPos.x - 25);
-      agentText.y(validPos.y - 35);
+      agentText.x(validPos.x - 35);
+      agentText.y(validPos.y - 45);
     }
 
     return validPos;
@@ -798,7 +795,7 @@ export default function TownMap() {
           <div className="relative">
             {/* 背景地图图片 */}
             <div
-              className="absolute top-0 z-1 left-0 pointer-events-none"
+              className="absolute top-0 z-[5] left-0 pointer-events-none"
               style={{
                 transform: `scale(${stageScale}) translate(${
                   stagePosition.x / stageScale
@@ -816,18 +813,20 @@ export default function TownMap() {
               />
             </div>
 
-            <Stage
-              width={stageSize.width}
-              height={stageSize.height}
-              ref={stageRef}
-              scaleX={stageScale}
-              scaleY={stageScale}
-              x={stagePosition.x}
-              y={stagePosition.y}
-              onWheel={handleWheel}
-              draggable
-              onDragEnd={handleStageDragEnd}
-            >
+            <div className="relative z-0">
+              <Stage
+                width={stageSize.width}
+                height={stageSize.height}
+                ref={stageRef}
+                scaleX={stageScale}
+                scaleY={stageScale}
+                x={stagePosition.x}
+                y={stagePosition.y}
+                onWheel={handleWheel}
+                draggable
+                onDragEnd={handleStageDragEnd}
+              >
+              {/* 建图层 - 最底层 */}
               <Layer
                 ref={(node) => {
                   if (node) layerRef.current = node;
@@ -942,7 +941,21 @@ export default function TownMap() {
                     cornerRadius={4}
                   />
                 ))}
-
+              </Layer>
+            </Stage>
+            </div>
+            
+            {/* Agents层 - 最顶层，单独的Stage */}
+            <div className="absolute top-0 left-0 z-10">
+              <Stage
+                width={stageSize.width}
+                height={stageSize.height}
+                scaleX={stageScale}
+                scaleY={stageScale}
+                x={stagePosition.x}
+                y={stagePosition.y}
+              >
+              <Layer>
                 {/* 数字人 */}
                 {agents.map((agent) => (
                   <Group key={`agent-${agent.id}`}>
@@ -960,7 +973,7 @@ export default function TownMap() {
                       }}
                       x={agent.position.x}
                       y={agent.position.y}
-                      radius={10}
+                      radius={15}
                       fill={agent.color}
                       shadowColor="black"
                       shadowBlur={agent.status === "walking" ? 4 : 0}
@@ -984,9 +997,9 @@ export default function TownMap() {
                       }
                       scale={
                         agent.status === "talking"
-                          ? { x: 1.2, y: 1.2 }
+                          ? { x: 1.3, y: 1.3 }
                           : draggingAgentId === agent.id
-                          ? { x: 1.1, y: 1.1 }
+                          ? { x: 1.15, y: 1.15 }
                           : { x: 1, y: 1 }
                       }
                       // 添加点击事件
@@ -1051,17 +1064,18 @@ export default function TownMap() {
                       text={`${agent.name} ${
                         agent.status === "talking" ? "💬" : ""
                       }`}
-                      x={agent.position.x - 25}
-                      y={agent.position.y - 35}
-                      fontSize={10}
+                      x={agent.position.x - 35}
+                      y={agent.position.y - 45}
+                      fontSize={12}
                       fill="#333"
                       align="center"
-                      width={50}
+                      width={70}
                     />
                   </Group>
                 ))}
               </Layer>
-            </Stage>
+              </Stage>
+            </div>
           </div>
         </div>
 

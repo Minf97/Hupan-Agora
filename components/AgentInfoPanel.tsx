@@ -343,9 +343,6 @@ export function AgentInfoPanel({
                   </Badge>
                   <div className="mt-2 text-sm text-muted-foreground">
                     <p>位置: ({agent.x}, {agent.y})</p>
-                    {agent.currentTask && (
-                      <p>当前任务: {agent.currentTask}</p>
-                    )}
                   </div>
                 </div>
               </div>

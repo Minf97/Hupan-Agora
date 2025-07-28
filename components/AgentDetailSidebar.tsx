@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { X } from "lucide-react";
 import ChatSidebar from "@/components/ChatSidebar";
+import Image from "next/image";
 
 interface AgentDetailSidebarProps {
   agentId: number;
@@ -81,6 +82,8 @@ export default function AgentDetailSidebar({
 
   // 渲染标签页内容
   const renderTabContent = () => {
+    console.log(agent, "agent.avatar_url");
+    
     switch (activeTab) {
       case 'details':
         return (
@@ -88,7 +91,7 @@ export default function AgentDetailSidebar({
             {/* Avatar and Basic Info */}
             <div className="text-center">
               <div className="w-20 h-20 bg-gray-300 rounded-full mx-auto mb-4 flex items-center justify-center text-gray-600 text-sm">
-                头像
+                <Image src={agent.avatar_url} fill alt="avatar"></Image>
               </div>
               <h1 className="text-2xl font-bold mb-2">{agent.name}</h1>
             </div>

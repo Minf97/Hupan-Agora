@@ -104,6 +104,7 @@ export async function retrieveSimilarMemories(
       ...memory,
       type: memory.type as MemoryRecord['type'],
       similarity: memory.similarity,
+      importance: memory.importance || 0,
     }));
   } catch (error) {
     console.error('检索相似记忆失败:', error);

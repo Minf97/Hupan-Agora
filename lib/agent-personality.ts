@@ -95,7 +95,7 @@ export function getAgentPersonality(agentId: number): AgentPersonality {
 // 预设的Agent个性
 export const AGENT_PERSONALITIES: { [key: number]: AgentPersonality } = {
   1: {
-    name: '张三',
+    name: 'Mike',
     age: 28,
     occupation: '软件工程师',
     background: '热爱编程，喜欢钻研新技术，性格相对内向但对技术话题很健谈',
@@ -116,7 +116,7 @@ export const AGENT_PERSONALITIES: { [key: number]: AgentPersonality } = {
     }
   },
   2: {
-    name: '李四',
+    name: 'Cassin',
     age: 25,
     occupation: '市场营销',
     background: '外向开朗，善于交际，对商业和市场趋势很敏感',
@@ -137,7 +137,49 @@ export const AGENT_PERSONALITIES: { [key: number]: AgentPersonality } = {
     }
   },
   3: {
-    name: '王五',
+    name: 'Dax',
+    age: 32,
+    occupation: '设计师',
+    background: '艺术感强，追求美学，有些完美主义倾向',
+    traits: {
+      extraversion: 0.5,
+      agreeableness: 0.6,
+      conscientiousness: 0.9,
+      neuroticism: 0.6,
+      openness: 0.95
+    },
+    interests: ['设计', '艺术', '摄影', '音乐'],
+    mood: 'neutral',
+    memories: [],
+    conversationStyle: {
+      formality: 0.7,
+      verbosity: 0.6,
+      friendliness: 0.5
+    }
+  },
+  4: {
+    name: 'Roland',
+    age: 32,
+    occupation: '设计师',
+    background: '艺术感强，追求美学，有些完美主义倾向',
+    traits: {
+      extraversion: 0.5,
+      agreeableness: 0.6,
+      conscientiousness: 0.9,
+      neuroticism: 0.6,
+      openness: 0.95
+    },
+    interests: ['设计', '艺术', '摄影', '音乐'],
+    mood: 'neutral',
+    memories: [],
+    conversationStyle: {
+      formality: 0.7,
+      verbosity: 0.6,
+      friendliness: 0.5
+    }
+  },
+  5: {
+    name: 'Dax',
     age: 32,
     occupation: '设计师',
     background: '艺术感强，追求美学，有些完美主义倾向',
