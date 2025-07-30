@@ -60,7 +60,7 @@ interface LogEntry {
 // Agent头像组件
 interface AgentAvatarProps {
   agent: any;
-  agentRef: (node: Konva.Circle | null) => void;
+  agentRef: (node: Konva.Group | null) => void;
   onClick: () => void;
   onDragStart: () => void;
   onDragMove: (newPos: { x: number; y: number }) => { x: number; y: number };
@@ -84,9 +84,22 @@ const AgentAvatar: React.FC<AgentAvatarProps> = ({
   draggingAgentId,
 }) => {
   const [image] = useImage(agent.avatar || "/default-avatar.png");
+  const groupRef = useRef<Konva.Group>(null);
+
+  // 监听agent位置变化，直接更新Konva节点位置
+  useEffect(() => {
+    if (groupRef.current) {
+      groupRef.current.x(agent.position.x);
+      groupRef.current.y(agent.position.y);
+    }
+  }, [agent.position.x, agent.position.y]);
 
   return (
     <Group
+      ref={(node) => {
+        groupRef.current = node;
+        if (agentRef) agentRef(node);
+      }}
       x={agent.position.x}
       y={agent.position.y}
       onClick={onClick}
@@ -142,7 +155,6 @@ const AgentAvatar: React.FC<AgentAvatarProps> = ({
           />
           {/* 用于位置追踪的隐藏Circle */}
           <Circle
-            ref={agentRef}
             x={0}
             y={0}
             radius={15}
@@ -150,37 +162,7 @@ const AgentAvatar: React.FC<AgentAvatarProps> = ({
             visible={false}
           />
         </>
-      ) : (
-        // 加载中或没有头像时显示圆圈
-        <Circle
-          ref={agentRef}
-          x={0}
-          y={0}
-          radius={15}
-          fill={agent.color}
-          shadowColor="black"
-          shadowBlur={agent.status === "walking" ? 4 : 0}
-          shadowOpacity={agent.status === "walking" ? 0.4 : 0}
-          shadowOffsetX={agent.status === "walking" ? 1 : 0}
-          shadowOffsetY={agent.status === "walking" ? 1 : 0}
-          scaleX={
-            agent.status === "talking"
-              ? 1.3
-              : draggingAgentId === agent.id
-              ? 1.15
-              : 1
-          }
-          scaleY={
-            agent.status === "talking"
-              ? 1.3
-              : draggingAgentId === agent.id
-              ? 1.15
-              : 1
-          }
-          onClick={onClick}
-          onTap={onClick}
-        />
-      )}
+      ) : null}
 
       {/* 状态边框 */}
       <Circle
@@ -250,8 +232,8 @@ const ConversationRipple: React.FC<ConversationRippleProps> = ({
     const createNewRipple = () => {
       const newRipple = {
         id: `ripple-${rippleIdCounter.current++}`,
-        radius: 15,
-        opacity: 0.6,
+        radius: 8,
+        opacity: 0.4,
       };
 
       setRipples((prev) => [...prev, newRipple]);
@@ -265,10 +247,10 @@ const ConversationRipple: React.FC<ConversationRippleProps> = ({
         return prev
           .map((ripple) => ({
             ...ripple,
-            radius: ripple.radius + 0.8, // 波纹扩散速度
-            opacity: Math.max(0, ripple.opacity - 0.008), // 透明度衰减
+            radius: ripple.radius + 0.5, // 波纹扩散速度
+            opacity: Math.max(0, ripple.opacity - 0.012), // 透明度衰减
           }))
-          .filter((ripple) => ripple.opacity > 0 && ripple.radius < 40); // 移除完全透明或过大的波纹
+          .filter((ripple) => ripple.opacity > 0 && ripple.radius < 25); // 移除完全透明或过大的波纹
       });
     }, layer);
 

@@ -202,6 +202,7 @@ class CloudflareSocket {
                 target: null,
                 status: (agent.status as AgentState["status"]) || "idle",
                 color: agent.color,
+                avatar: agent.avatar,
               })
             );
             callbacks.onInit(initialAgents, payload.townTime);

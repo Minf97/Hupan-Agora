@@ -52,7 +52,7 @@ export const useSocketManager = () => {
     agentsRef.current = agents;
   }, [agents]);
 
-  const agentCirclesRef = useRef<{ [key: number]: Konva.Circle }>({});
+  const agentCirclesRef = useRef<{ [key: number]: Konva.Group }>({});
   const agentTextsRef = useRef<{ [key: number]: Konva.Text }>({});
 
   // 使用拆分的hooks
@@ -69,6 +69,8 @@ export const useSocketManager = () => {
     onConnect: () => {},
     onConnectError: () => {},
     onInit: (initialAgents, newTownTime) => {
+      console.log(initialAgents, "initialAgents");
+      
       setAgents(initialAgents);
       setTownTime(newTownTime);
     },
@@ -176,6 +178,12 @@ export const useSocketManager = () => {
       case "move":
         // console.log(task, "move task");
         if (task.task.to) {
+          // 检查agent当前状态，如果正在聊天则忽略移动任务
+          const currentAgent = agentsRef.current.find(agent => agent.id === agentId);
+          if (currentAgent && currentAgent.status === "talking") {
+            console.log(`🚫 Agent ${agentId} 正在聊天，忽略移动任务`);
+            return;
+          }
           animateAgentMovement(agentId, task.task.to);
         }
         break;

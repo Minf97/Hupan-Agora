@@ -58,8 +58,6 @@ export async function fetchAgentPersonalityFromDB(agentId: number): Promise<Agen
 
   } catch (error) {
     console.error(`❌ 从数据库获取Agent ${agentId} 个性失败:`, error);
-    // 返回基于ID的默认个性
-    return createFallbackPersonality(agentId);
   }
 }
 
@@ -163,36 +161,6 @@ function calculateConversationStyleFromHistory(chatHistory: any[], memories: Age
 // 基于ID计算年龄
 function calculateAgeBasedOnId(agentId: number): number {
   return 20 + (agentId % 30); // 20-49岁范围
-}
-
-// 创建后备个性（当数据库获取失败时）
-export function createFallbackPersonality(agentId: number): AgentPersonality {
-  const names = ['AI助手', '小明', '小红', '小强', '小丽', '小刚', '小美', '小华', '小芳'];
-  const occupations = ['助手', '学生', '工程师', '老师', '医生', '设计师', '销售', '律师'];
-  
-  console.warn(`⚠️ 使用Agent ${agentId} 的后备个性数据`);
-  
-  return {
-    name: names[agentId % names.length] || `Agent${agentId}`,
-    age: 20 + (agentId % 20),
-    occupation: occupations[agentId % occupations.length],
-    background: '一个友好的AI助手，乐于帮助他人',
-    traits: {
-      extraversion: 0.3 + (agentId % 7) * 0.1,
-      agreeableness: 0.4 + (agentId % 6) * 0.1,
-      conscientiousness: 0.5 + (agentId % 5) * 0.1,
-      neuroticism: 0.2 + (agentId % 4) * 0.1,
-      openness: 0.6 + (agentId % 4) * 0.1
-    },
-    interests: ['聊天', '学习', '帮助他人'],
-    mood: 'neutral',
-    memories: [],
-    conversationStyle: {
-      formality: 0.5,
-      verbosity: 0.5,
-      friendliness: 0.7
-    }
-  };
 }
 
 // 缓存机制

@@ -8,7 +8,7 @@ import { getConversationManager } from "@/lib/conversation-manager";
 import { getAgentPersonalityFromDB } from "@/lib/agent-database";
 
 interface AnimationRefs {
-  agentCirclesRef: React.MutableRefObject<{ [key: number]: Konva.Circle }>;
+  agentCirclesRef: React.MutableRefObject<{ [key: number]: Konva.Group }>;
   agentTextsRef: React.MutableRefObject<{ [key: number]: Konva.Text }>;
 }
 

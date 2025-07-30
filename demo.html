@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多Agent交互模拟系统 (优化版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            overflow: hidden;
+        }
+        .map {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-color: #f0f4f8;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            background-image:
+                linear-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .agent {
+            position: absolute;
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            cursor: pointer;
+            user-select: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .agent:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 12px rgba(0,0,0,0.15);
+        }
+        .agent-avatar {
+            font-size: 24px;
+        }
+        .agent-name {
+            font-size: 10px;
+            font-weight: 500;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        .chat-bubble {
+            position: absolute;
+            bottom: 75px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 8px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            max-width: 200px;
+            word-wrap: break-word;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            z-index: 10;
+            border: 1px solid #e2e8f0;
+        }
+        .chat-bubble.visible {
+            opacity: 1;
+        }
+        .status-indicator {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid white;
+        }
+        .status-wandering { background-color: #34d399; } /* green */
+        .status-talking { background-color: #fbbf24; } /* amber */
+        .status-finding { background-color: #f87171; } /* red */
+        .status-thinking { background-color: #60a5fa; } /* blue */
+
+        .log-panel {
+            height: 100%;
+            overflow-y: auto;
+            background-color: #ffffff;
+            border-left: 1px solid #e2e8f0;
+        }
+        .log-item {
+            padding: 8px 12px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 13px;
+        }
+        .log-item.system { color: #64748b; font-style: italic; }
+        .log-item.dialogue { color: #1e293b; }
+        .log-item.event { background-color: #e0f2fe; color: #0c4a6e; font-weight: 500; border-left: 4px solid #0ea5e9; }
+        .log-item.memory { background-color: #fefce8; color: #854d0e; font-style: italic; border-left: 4px solid #facc15;}
+
+        .selected-agent-panel {
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(5px);
+        }
+        .control-button {
+            background-color: #8b5cf6;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .control-button:hover {
+            background-color: #7c3aed;
+            transform: translateY(-2px);
+        }
+        .control-button:disabled {
+            background-color: #a78bfa;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="w-screen h-screen p-4 flex gap-4">
+        <!-- Main Map Area -->
+        <div class="w-3/4 h-full flex flex-col gap-4">
+            <div class="flex-grow relative">
+                <div id="map" class="map"></div>
+                <div id="controls" class="absolute top-2 left-2 flex gap-2">
+                    <button id="start-sim-btn" class="control-button">🚀 开始模拟</button>
+                    <button id="event-trigger-btn" class="control-button hidden">✨ 触发世界事件</button>
+                </div>
+            </div>
+            <div id="selected-agent-panel" class="h-48 p-4 border border-gray-200 rounded-lg shadow-sm selected-agent-panel hidden">
+                <h3 class="font-bold text-lg">选中的Agent信息</h3>
+                <div id="agent-details" class="mt-2 text-sm grid grid-cols-2 gap-x-4"></div>
+            </div>
+        </div>
+
+        <!-- Log Panel -->
+        <div class="w-1/4 h-full flex flex-col bg-white rounded-lg shadow-md">
+            <h2 class="text-lg font-bold p-4 border-b border-gray-200">系统日志与对话</h2>
+            <div id="log-panel" class="flex-grow overflow-y-auto p-2">
+                <!-- Logs will be appended here -->
+            </div>
+        </div>
+    </div>
+
+<script>
+// --- CONFIGURATION ---
+const apiKey = ""; // This is a placeholder, the environment will handle authentication.
+const modelName = "gemini-2.0-flash";
+const baseUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
+
+const AGENT_SPEED = 1.5; // **FIX**: Increased speed
+const ENCOUNTER_DISTANCE = 100;
+const GAME_TICK_MS = 100;
+const TALK_INITIATION_COOLDOWN = 10000;
+const MAX_CONVERSATION_TURNS = 10;
+
+// --- DOM ELEMENTS ---
+const mapElement = document.getElementById('map');
+const logPanel = document.getElementById('log-panel');
+const selectedAgentPanel = document.getElementById('selected-agent-panel');
+const agentDetails = document.getElementById('agent-details');
+const startSimBtn = document.getElementById('start-sim-btn');
+const eventTriggerBtn = document.getElementById('event-trigger-btn');
+
+
+// --- GLOBAL STATE ---
+const PROFESSIONS = {
+    "程序员": { emoji: "💻", color: "bg-blue-500" },
+    "设计师": { emoji: "🎨", color: "bg-purple-500" },
+    "产品经理": { emoji: "📈", color: "bg-green-500" },
+    "艺术家": { emoji: "🎭", color: "bg-pink-500" },
+    "AI专家": { emoji: "🤖", color: "bg-indigo-500" }
+};
+let agents = [];
+let conversations = {};
+let nextAgentId = 0;
+let currentWorldEvent = null;
+let simulationStarted = false;
+
+// --- UTILITY FUNCTIONS ---
+const getRandomPosition = () => ({
+    x: Math.random() * (mapElement.clientWidth - 64),
+    y: Math.random() * (mapElement.clientHeight - 64)
+});
+
+const getDistance = (agent1, agent2) => {
+    return Math.sqrt(Math.pow(agent1.x - agent2.x, 2) + Math.pow(agent1.y - agent2.y, 2));
+};
+
+function logMessage(message, type = 'system') {
+    const item = document.createElement('div');
+    item.className = `log-item ${type}`;
+    item.innerHTML = message;
+    logPanel.appendChild(item);
+    logPanel.scrollTop = logPanel.scrollHeight;
+}
+
+// --- GEMINI API CALLER ---
+async function callGemini(prompt) {
+    try {
+        const payload = {
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+                responseMimeType: "application/json",
+            }
+        };
+        const finalUrl = `${baseUrl}?key=${apiKey}`;
+
+        const response = await fetch(finalUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+            const errorBody = await response.text();
+            throw new Error(`API call failed with status: ${response.status}. Body: ${errorBody}`);
+        }
+        const data = await response.json();
+        if (data.candidates && data.candidates.length > 0) {
+            const rawText = data.candidates[0].content.parts[0].text;
+            try {
+                return JSON.parse(rawText);
+            } catch (e) {
+                console.error("Failed to parse JSON from Gemini:", rawText);
+                throw new Error("Invalid JSON response from API.");
+            }
+        }
+        throw new Error("Invalid response structure from API.");
+    } catch (error) {
+        console.error("Gemini API Error:", error);
+        logMessage(`❗️ API调用失败: ${error.message}`, 'system');
+        return { error: true, message: error.message };
+    }
+}
+
+// --- AGENT CLASS ---
+class Agent {
+    constructor(name, profession) {
+        this.id = `agent-${nextAgentId++}`;
+        this.name = name;
+        this.profession = profession;
+        const pos = getRandomPosition();
+        this.x = pos.x;
+        this.y = pos.y;
+        this.state = 'wandering';
+        this.motivation = { action: 'wander' };
+        this.target = getRandomPosition();
+        this.lastEncounterCheck = {};
+        this.conversationId = null;
+        this.lastMessage = "";
+        this.memory = [];
+        this.createElement();
+    }
+
+    createElement() {
+        this.element = document.createElement('div');
+        this.element.id = this.id;
+        this.element.className = `agent ${PROFESSIONS[this.profession].color}`;
+        this.element.innerHTML = `
+            <div class="agent-avatar">${PROFESSIONS[this.profession].emoji}</div>
+            <div class="agent-name">${this.name}</div>
+            <div class="status-indicator"></div>
+            <div class="chat-bubble"></div>
+        `;
+        mapElement.appendChild(this.element);
+        this.element.addEventListener('click', () => this.showDetails());
+    }
+
+    update() {
+        this.move();
+        this.updateElement();
+    }
+
+    move() {
+        if (this.state === 'talking' || this.state === 'thinking' || !simulationStarted) return;
+        const dx = this.target.x - this.x;
+        const dy = this.target.y - this.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < 5) {
+            if (this.state === 'finding') {
+                this.setWandering(`在寻找${this.motivation.target_profession}后开始闲逛`);
+            } else {
+                this.target = getRandomPosition();
+            }
+        } else {
+            this.x += (dx / distance) * AGENT_SPEED;
+            this.y += (dy / distance) * AGENT_SPEED;
+        }
+    }
+    
+    setWandering(reason) {
+        if (this.state === 'talking') {
+             logMessage(`🚶 ${this.name} 结束了对话并开始闲逛。原因: ${reason}`);
+        }
+        this.state = 'wandering';
+        this.motivation = { action: 'wander' };
+        this.target = getRandomPosition();
+        this.conversationId = null;
+    }
+
+    setFinding(targetProfession, reason) {
+        logMessage(`🎯 ${this.name} 决定去寻找一位 ${targetProfession}。原因: ${reason}`);
+        this.state = 'finding';
+        this.motivation = { action: 'find', target: targetProfession };
+        this.conversationId = null;
+        const targetAgent = agents.find(a => a.profession === targetProfession && a.id !== this.id);
+        if (targetAgent) {
+            this.target = { x: targetAgent.x, y: targetAgent.y };
+            logMessage(`${this.name} 发现了 ${targetAgent.name} (${targetProfession})，正在前往。`);
+        } else {
+            this.target = getRandomPosition();
+            logMessage(`地图上暂时没有 ${targetProfession}，${this.name} 先四处看看。`);
+        }
+    }
+
+    updateElement() {
+        this.element.style.transform = `translate(${this.x}px, ${this.y}px)`;
+        const statusIndicator = this.element.querySelector('.status-indicator');
+        statusIndicator.className = `status-indicator status-${this.state}`;
+    }
+    
+    showDetails() {
+        selectedAgentPanel.classList.remove('hidden');
+        const memoryHtml = this.memory.length > 0 ? this.memory.map(m => `<li>- ${m}</li>`).join('') : '<li>暂无记忆</li>';
+        agentDetails.innerHTML = `
+            <div>
+                <p><strong>姓名:</strong> ${this.name} (${this.id})</p>
+                <p><strong>职业:</strong> ${this.profession}</p>
+                <p><strong>状态:</strong> ${this.state}</p>
+                <p><strong>最近的话:</strong> ${this.lastMessage || '无'}</p>
+                <div class="mt-2">
+                    <strong>记忆:</strong>
+                    <ul class="list-disc list-inside text-xs h-16 overflow-y-auto">${memoryHtml}</ul>
+                </div>
+            </div>
+            <div class="flex flex-col items-start gap-2">
+                 <button onclick="viewInnerThoughts('${this.id}')" class="control-button" style="font-size:12px; padding: 4px 8px;">✨ 查看内心想法</button>
+                 <div id="thought-bubble" class="text-xs italic text-gray-600 mt-1 p-2 bg-gray-100 rounded">点击按钮来查看...</div>
+            </div>
+        `;
+    }
+
+    displayBubble(message) {
+        this.lastMessage = message;
+        const bubble = this.element.querySelector('.chat-bubble');
+        bubble.textContent = message;
+        bubble.classList.add('visible');
+        setTimeout(() => bubble.classList.remove('visible'), 5000);
+    }
+
+    async decideToTalk(otherAgent) {
+        this.state = 'thinking';
+        const eventContext = currentWorldEvent ? `当前世界事件是: "${currentWorldEvent.description}".` : "当前没有特殊事件发生。";
+        const memoryContext = this.memory.length > 0 ? `你的记忆中有这些过去的互动摘要:\n- ${this.memory.join('\n- ')}` : "你还没有任何过去的互动记忆。";
+
+        const prompt = `你叫 ${this.name}，是一名${this.profession}。
+        ${memoryContext}
+        ${eventContext}
+        你当前的动机是 ${JSON.stringify(this.motivation)}。
+        你现在遇到了 ${otherAgent.name} (${otherAgent.profession})。
+        基于你的记忆和当前情况，你是否想和TA发起对话？请只返回一个JSON对象，格式为: {"should_initiate": boolean, "reason": "你的理由"}`;
+        
+        const decision = await callGemini(prompt);
+        if (decision.error) {
+            return { should_initiate: false, reason: `AI决策时发生错误: ${decision.message}` };
+        }
+        return decision;
+    }
+    
+    async generateDialogue(conversation) {
+        this.state = 'thinking';
+        const otherAgent = agents.find(a => a.id === conversation.participants.find(pId => pId !== this.id));
+        const history = conversation.history.map(h => `${h.name}: ${h.dialogue}`).join('\n');
+        const eventContext = currentWorldEvent ? `当前世界事件是: "${currentWorldEvent.description}".` : "当前没有特殊事件发生。";
+        const memoryContext = this.memory.length > 0 ? `你的记忆中有这些过去的互动摘要:\n- ${this.memory.join('\n- ')}` : "你还没有任何过去的互动记忆。";
+
+        const prompt = `
+        你叫 ${this.name}，是一名${this.profession}。
+        规则: 你的话要简短、直接，不要太客气。
+        你的记忆:
+        ${this.memory.join('\n')}
+        
+        当前情景:
+        大背景: ${eventContext}
+        你正在和 ${otherAgent.name} (${otherAgent.profession}) 对话。
+        对话历史:
+        ${history || "（这是对话的第一句话）"}
+
+        现在轮到你发言。请根据你的记忆和当前对话，生成你的下一句话，并决定下一步行动。
+        行动选项: "continue_talking", "leave_and_wander", "leave_and_find"。
+        请只返回一个JSON对象，格式为:
+        { "dialogue": "你要说的话", "action": { "action": "..." } }
+        `;
+        
+        const response = await callGemini(prompt);
+        if (this.state === 'thinking') this.state = 'talking';
+        if (response.error) {
+            return { dialogue: "我好像有点走神了...", action: { action: "leave_and_wander" } };
+        }
+        return response;
+    }
+}
+
+// --- NEW/UPDATED FEATURES ---
+function startSimulation() {
+    simulationStarted = true;
+    startSimBtn.classList.add('hidden');
+    eventTriggerBtn.classList.remove('hidden');
+    logMessage("🚀 模拟已开始！Agent们开始自由行动和交互。", 'system');
+}
+
+async function triggerWorldEvent() {
+    eventTriggerBtn.disabled = true;
+    eventTriggerBtn.textContent = "思考中...";
+    logMessage("🤔 正在向Gemini请求一个新的世界事件...", 'system');
+    
+    const professionList = Object.keys(PROFESSIONS).join(', ');
+    const prompt = `为包含[${professionList}]的虚拟世界生成一个有趣的、简短的突发事件。事件应该能影响他们的互动。例如:“咖啡机坏了”, “宣布一个惊喜的项目截止日期”, “Wi-Fi断了”。请只返回一个JSON对象，格式为: {"event_name": "事件标题", "description": "事件的简短描述。"}`;
+
+    const event = await callGemini(prompt);
+
+    if (!event.error) {
+        currentWorldEvent = event;
+        logMessage(`🎉 <strong>世界事件: ${event.event_name}</strong> - ${event.description}`, 'event');
+    } else {
+        logMessage(`❗️ 生成世界事件失败。`, 'system');
+    }
+    
+    eventTriggerBtn.disabled = false;
+    eventTriggerBtn.textContent = "✨ 触发世界事件";
+}
+
+async function viewInnerThoughts(agentId) {
+    const agent = agents.find(a => a.id === agentId);
+    if (!agent) return;
+
+    const thoughtBubble = document.getElementById('thought-bubble');
+    if(!thoughtBubble) return;
+    thoughtBubble.textContent = "正在思考...";
+
+    const eventContext = currentWorldEvent ? `当前世界事件是: "${currentWorldEvent.description}".` : "当前没有特殊事件发生。";
+    const memoryContext = agent.memory.length > 0 ? `你的记忆中有这些过去的互动摘要:\n- ${agent.memory.join('\n- ')}` : "你还没有任何过去的互动记忆。";
+
+    const prompt = `你叫 ${agent.name}，是一名${agent.profession}。
+    你的记忆:
+    ${agent.memory.join('\n')}
+    当前情景:
+    ${eventContext}
+    你当前的状态是“${agent.state}”。
+    请用第一人称简短描述你此刻的内心想法。请只返回一个JSON对象，格式为: {"thought": "你的内心独白。"}`;
+
+    const response = await callGemini(prompt);
+
+    if (!response.error) {
+        thoughtBubble.textContent = `“${response.thought}”`;
+    } else {
+        thoughtBubble.textContent = "无法读取想法...";
+    }
+}
+
+
+// --- SIMULATION LOGIC ---
+function init() {
+    logMessage("👋 欢迎来到多Agent模拟系统。", 'system');
+    agents.push(new Agent("艾丽斯", "程序员"));
+    agents.push(new Agent("鲍勃", "设计师"));
+    agents.push(new Agent("查理", "产品经理"));
+    agents.push(new Agent("黛安娜", "艺术家"));
+    agents.push(new Agent("伊万", "AI专家"));
+    
+    agents.forEach(agent => agent.updateElement()); // Initial render
+    logMessage("✅ 5位Agent已就位。", 'system');
+    logMessage("💡 请点击左上角的“开始模拟”按钮。", 'system');
+
+    startSimBtn.addEventListener('click', startSimulation);
+    eventTriggerBtn.addEventListener('click', triggerWorldEvent);
+    setInterval(gameLoop, GAME_TICK_MS);
+}
+
+async function checkEncounters() {
+    for (let i = 0; i < agents.length; i++) {
+        for (let j = i + 1; j < agents.length; j++) {
+            const agentA = agents[i];
+            const agentB = agents[j];
+
+            if (agentA.state !== 'wandering' && agentA.state !== 'finding') continue;
+            if (agentB.state !== 'wandering' && agentB.state !== 'finding') continue;
+
+            const distance = getDistance(agentA, agentB);
+            if (distance < ENCOUNTER_DISTANCE) {
+                const now = Date.now();
+                const lastCheckA = agentA.lastEncounterCheck[agentB.id] || 0;
+                const lastCheckB = agentB.lastEncounterCheck[agentA.id] || 0;
+
+                if (now - lastCheckA > TALK_INITIATION_COOLDOWN && now - lastCheckB > TALK_INITIATION_COOLDOWN) {
+                    agentA.lastEncounterCheck[agentB.id] = now;
+                    agentB.lastEncounterCheck[agentA.id] = now;
+                    
+                    logMessage(`🤝 ${agentA.name} (${agentA.profession}) 和 ${agentB.name} (${agentB.profession}) 相遇了...`, 'system');
+                    
+                    agentA.state = 'thinking';
+                    agentB.state = 'thinking';
+
+                    const decisionA = await agentA.decideToTalk(agentB);
+
+                    if (!decisionA.should_initiate) {
+                        logMessage(`- ${agentA.name} 决定: ${decisionA.should_initiate}. 原因: ${decisionA.reason}`, 'system');
+                        logMessage(`- 由于 ${agentA.name} 不想交谈，对话未发起。`, 'system');
+                        agentA.state = 'wandering';
+                        agentB.state = 'wandering';
+                        continue;
+                    }
+
+                    const decisionB = await agentB.decideToTalk(agentA);
+
+                    logMessage(`- ${agentA.name} 决定: ${decisionA.should_initiate}. 原因: ${decisionA.reason}`, 'system');
+                    logMessage(`- ${agentB.name} 决定: ${decisionB.should_initiate}. 原因: ${decisionB.reason}`, 'system');
+
+                    if (decisionA.should_initiate && decisionB.should_initiate) {
+                        startConversation(agentA, agentB);
+                    } else {
+                        logMessage(`❌ 对话未发起，双方未达成共识。`, 'system');
+                        agentA.state = 'wandering';
+                        agentB.state = 'wandering';
+                    }
+                }
+            }
+        }
+    }
+}
+
+function startConversation(agentA, agentB) {
+    const conversationId = `conv-${Date.now()}`;
+    logMessage(`💬 对话开始! ${agentA.name} 与 ${agentB.name}.`, 'dialogue');
+    agentA.state = 'talking';
+    agentB.state = 'talking';
+    agentA.conversationId = conversationId;
+    agentB.conversationId = conversationId;
+    conversations[conversationId] = { id: conversationId, participants: [agentA.id, agentB.id], history: [], turn: agentA.id, turnCount: 0 };
+    agentA.target = { x: agentA.x, y: agentA.y };
+    agentB.target = { x: agentB.x, y: agentB.y };
+    handleConversationTurn(conversationId);
+}
+
+async function handleConversationTurn(conversationId) {
+    const conversation = conversations[conversationId];
+    if (!conversation) return; // **FIX**: Check if conversation was ended by another process.
+
+    if (conversation.turnCount >= MAX_CONVERSATION_TURNS) {
+        endConversation(conversationId, "对话达到最大轮次");
+        return;
+    }
+    const currentSpeaker = agents.find(a => a.id === conversation.turn);
+    if (!currentSpeaker || currentSpeaker.state !== 'talking') {
+        endConversation(conversationId, "一方提前离开");
+        return;
+    }
+    const response = await currentSpeaker.generateDialogue(conversation);
+    
+    // **FIX**: After a potentially long API call, check again if the conversation still exists.
+    if (!conversations[conversationId]) return;
+
+    currentSpeaker.displayBubble(response.dialogue);
+    logMessage(`<strong>${currentSpeaker.name}:</strong> ${response.dialogue}`, 'dialogue');
+    conversation.history.push({ name: currentSpeaker.name, dialogue: response.dialogue });
+    conversation.turnCount++;
+    
+    const action = response.action.action;
+    if (action === 'continue_talking') {
+        conversation.turn = conversation.participants.find(pId => pId !== currentSpeaker.id);
+        setTimeout(() => handleConversationTurn(conversationId), 1000);
+    } else {
+        // End the conversation immediately for both parties.
+        endConversation(conversationId, `${currentSpeaker.name} 决定结束对话`);
+        
+        // Then, set the specific action for the agent who decided to leave.
+        if (action === 'leave_and_wander') {
+            currentSpeaker.setWandering(response.dialogue);
+        } else if (action === 'leave_and_find' && response.action.target_profession) {
+            currentSpeaker.setFinding(response.action.target_profession, response.dialogue);
+        } else {
+            currentSpeaker.setWandering("决定离开但未指定目标");
+        }
+    }
+}
+
+async function summarizeAndStoreMemory(history, participantIds) {
+    if (!history || history.length === 0) return;
+
+    const historyText = history.map(h => `${h.name}: ${h.dialogue}`).join('\n');
+    const prompt = `请将以下对话总结为一句简短的、以第一人称视角记录的记忆。总结应捕捉对话的核心要点或感受。
+    对话内容:
+    ${historyText}
+    请只返回一个JSON对象，格式为: {"summary": "你的总结。"}`;
+
+    const response = await callGemini(prompt);
+    if (response && !response.error && response.summary) {
+        logMessage(`📝 新记忆已形成: "${response.summary}"`, 'memory');
+        participantIds.forEach(agentId => {
+            const agent = agents.find(a => a.id === agentId);
+            if (agent) {
+                agent.memory.push(response.summary);
+                if (agent.memory.length > 10) {
+                    agent.memory.shift();
+                }
+            }
+        });
+    }
+}
+
+
+function endConversation(conversationId, reason) {
+    const conversation = conversations[conversationId];
+    if (!conversation) return;
+
+    logMessage(`🛑 对话 ${conversationId.slice(-4)} 结束。原因: ${reason}`, 'system');
+    
+    const participantIds = [...conversation.participants];
+    const historyForMemory = [...conversation.history];
+
+    // **FIX**: Immediately delete the conversation to prevent other turns from starting.
+    delete conversations[conversationId];
+
+    // **FIX**: Set both agents to wandering first to ensure they stop talking.
+    participantIds.forEach(agentId => {
+        const agent = agents.find(a => a.id === agentId);
+        if (agent && agent.conversationId === conversationId) {
+            agent.setWandering("对话结束");
+        }
+    });
+    
+    // The memory summarization now runs as a background task.
+    if (historyForMemory.length > 0) {
+        summarizeAndStoreMemory(historyForMemory, participantIds);
+    }
+}
+
+let encounterCheckRunning = false;
+async function gameLoop() {
+    // Agent movement and rendering always runs
+    agents.forEach(agent => agent.update());
+
+    // Encounter checks only run after the simulation has started
+    if (simulationStarted && !encounterCheckRunning) {
+        encounterCheckRunning = true;
+        try {
+            await checkEncounters();
+        } catch (e) {
+            console.error("Error during encounter check:", e);
+            logMessage(`❗️ 遭遇检测循环出错: ${e.message}`, 'system');
+        } finally {
+            encounterCheckRunning = false;
+        }
+    }
+}
+
+// --- INITIALIZATION ---
+window.onload = init;
+</script>
+</body>
+</html>
