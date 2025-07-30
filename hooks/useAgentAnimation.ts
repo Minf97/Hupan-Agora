@@ -375,6 +375,16 @@ export const useAgentAnimation = (refs: AnimationRefs, callbacks: AnimationCallb
       animationsRef.current[agentId].stop();
     }
 
+    // 同步Circle位置到当前agent位置（防止socket移动后位置不同步）
+    const currentAgents = callbacks.getCurrentAgents();
+    const currentAgent = currentAgents.find(a => a.id === agentId);
+    if (currentAgent) {
+      agentCircle.x(currentAgent.position.x);
+      agentCircle.y(currentAgent.position.y);
+      agentText.x(currentAgent.position.x - 35);
+      agentText.y(currentAgent.position.y - 45);
+    }
+
     const currentX = agentCircle.x();
     const currentY = agentCircle.y();
 

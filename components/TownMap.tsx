@@ -1,7 +1,16 @@
 "use client";
 
 import { useRef, useEffect, useState } from "react";
-import { Stage, Layer, Rect, Circle, Text, Group, Ring, Image as KonvaImage } from "react-konva";
+import {
+  Stage,
+  Layer,
+  Rect,
+  Circle,
+  Text,
+  Group,
+  Ring,
+  Image as KonvaImage,
+} from "react-konva";
 import Konva from "konva";
 import { MAP_CONFIG, Room, WallType } from "@/lib/map-config";
 import { useSocketManager } from "@/hooks/useSocketManager";
@@ -74,7 +83,7 @@ const AgentAvatar: React.FC<AgentAvatarProps> = ({
   draggable,
   draggingAgentId,
 }) => {
-  const [image] = useImage(agent.avatar || '/default-avatar.png');
+  const [image] = useImage(agent.avatar || "/default-avatar.png");
 
   return (
     <Group
@@ -172,7 +181,7 @@ const AgentAvatar: React.FC<AgentAvatarProps> = ({
           onTap={onClick}
         />
       )}
-      
+
       {/* 状态边框 */}
       <Circle
         x={0}
@@ -326,8 +335,12 @@ export default function TownMap() {
     thoughtLogger,
     setAgents,
     realtimeLogs, // 使用来自useSocketManager的实时日志
-    addRealtimeLog // 使用来自useSocketManager的添加方法
+    addRealtimeLog, // 使用来自useSocketManager的添加方法
   } = useSocketManager();
+
+  useEffect(() => {
+    console.log(agents, "agents!!!!!!");
+  }, [agents]);
 
   // 自动滚动到最新日志
   useEffect(() => {
@@ -348,13 +361,11 @@ export default function TownMap() {
 
   const { preloadAgents } = useAgentCacheStore();
 
- 
-
   // 预加载所有Agent缓存
   useEffect(() => {
     if (agents.length > 0) {
-      const agentIds = agents.map(agent => agent.id);
-      console.log(`🚀 预加载 ${agentIds.length} 个Agent缓存:`, agentIds);
+      const agentIds = agents.map((agent) => agent.id);
+      // console.log(`🚀 预加载 ${agentIds.length} 个Agent缓存:`, agentIds);
       preloadAgents(agentIds);
     }
   }, [agents, preloadAgents]);
@@ -364,8 +375,10 @@ export default function TownMap() {
   const recordedConversationsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    console.log(`🔍 agents状态变化检查: 当前${agents.length}个agents, 之前${prevAgentsRef.current.length}个`);
-    
+    console.log(
+      `🔍 agents状态变化检查: 当前${agents.length}个agents, 之前${prevAgentsRef.current.length}个`
+    );
+
     if (prevAgentsRef.current.length === 0) {
       prevAgentsRef.current = agents;
       console.log(`🏁 首次初始化agents状态`);
@@ -379,8 +392,10 @@ export default function TownMap() {
       agents.forEach((agent) => {
         const prevAgent = prevAgentsRef.current.find((a) => a.id === agent.id);
         if (prevAgent && prevAgent.status !== agent.status) {
-          console.log(`👤 Agent ${agent.name} 状态变化: ${prevAgent.status} → ${agent.status}`);
-          
+          console.log(
+            `👤 Agent ${agent.name} 状态变化: ${prevAgent.status} → ${agent.status}`
+          );
+
           // 记录进入交谈状态
           if (agent.status === "talking" && agent.talkingWith) {
             const targetAgent = agents.find((a) => a.id === agent.talkingWith);
@@ -426,7 +441,7 @@ export default function TownMap() {
     prevAgentsRef.current = agents;
   }, [agents]);
 
-  // 监听思考记录并添加到实时日志  
+  // 监听思考记录并添加到实时日志
   useEffect(() => {
     if (!thoughtLogger) return;
 
@@ -435,30 +450,52 @@ export default function TownMap() {
     const originalAddDecision = thoughtLogger.addDecision;
     const originalAddConversation = thoughtLogger.addConversation;
 
-    thoughtLogger.addInnerThought = (agentId: number, agentName: string, content: string, metadata?: any) => {
+    thoughtLogger.addInnerThought = (
+      agentId: number,
+      agentName: string,
+      content: string,
+      metadata?: any
+    ) => {
       // 添加到实时日志
       addRealtimeLog({
-        type: 'inner_thought',
+        type: "inner_thought",
         agentName,
         content: `💭 ${content}`,
         emotion: metadata?.emotion,
       });
-      
+
       // 调用原始方法
-      return originalAddInnerThought.call(thoughtLogger, agentId, agentName, content, metadata);
+      return originalAddInnerThought.call(
+        thoughtLogger,
+        agentId,
+        agentName,
+        content,
+        metadata
+      );
     };
 
-    thoughtLogger.addDecision = (agentId: number, agentName: string, content: string, metadata?: any) => {
+    thoughtLogger.addDecision = (
+      agentId: number,
+      agentName: string,
+      content: string,
+      metadata?: any
+    ) => {
       // 添加到实时日志
       addRealtimeLog({
-        type: 'decision',
+        type: "decision",
         agentName,
         content: `🤔 决定：${content}`,
         emotion: metadata?.emotion,
       });
-      
+
       // 调用原始方法
-      return originalAddDecision.call(thoughtLogger, agentId, agentName, content, metadata);
+      return originalAddDecision.call(
+        thoughtLogger,
+        agentId,
+        agentName,
+        content,
+        metadata
+      );
     };
 
     // 清理函数：恢复原始方法
@@ -539,20 +576,10 @@ export default function TownMap() {
     (thought) => thought.type === "conversation"
   );
 
-  // 移除不再需要的兼容代码
-  // const compatibleConversationMessages = conversationThoughts.map(
-  //   (thought) => ({
-  //     speaker: thought.agentName,
-  //     content: thought.content,
-  //     timestamp: thought.timestamp,
-  //     emotion: thought.metadata?.emotion,
-  //   })
-  // );
-
   // 处理代理点击事件
   const handleAgentClick = (agentId: number) => {
     console.log(agentId, "agentId", selectedAgentId);
-    
+
     setSelectedAgentId(agentId);
   };
 
@@ -989,125 +1016,125 @@ export default function TownMap() {
                 draggable
                 onDragEnd={handleStageDragEnd}
               >
-              {/* 建图层 - 最底层 */}
-              <Layer
-                ref={(node) => {
-                  if (node) layerRef.current = node;
-                }}
-              >
-                {/* 背景 */}
-                <Rect
-                  x={0}
-                  y={0}
-                  width={MAP_CONFIG.width}
-                  height={MAP_CONFIG.height}
-                  fill="#f9f9f9"
-                />
-
-                {/* 网格线 */}
-                {Array.from({
-                  length: Math.ceil(MAP_CONFIG.width / MAP_CONFIG.gridSize),
-                }).map((_, i) => (
+                {/* 建图层 - 最底层 */}
+                <Layer
+                  ref={(node) => {
+                    if (node) layerRef.current = node;
+                  }}
+                >
+                  {/* 背景 */}
                   <Rect
-                    key={`vline-${i}`}
-                    x={i * MAP_CONFIG.gridSize}
-                    y={0}
-                    width={1}
-                    height={MAP_CONFIG.height}
-                    fill="#e0e0e0"
-                  />
-                ))}
-                {Array.from({
-                  length: Math.ceil(MAP_CONFIG.height / MAP_CONFIG.gridSize),
-                }).map((_, i) => (
-                  <Rect
-                    key={`hline-${i}`}
                     x={0}
-                    y={i * MAP_CONFIG.gridSize}
+                    y={0}
                     width={MAP_CONFIG.width}
-                    height={1}
-                    fill="#e0e0e0"
+                    height={MAP_CONFIG.height}
+                    fill="#f9f9f9"
                   />
-                ))}
 
-                {/* Room backgrounds */}
-                {MAP_CONFIG.rooms.map((room) => (
-                  <Group key={`room-${room.id}`}>
+                  {/* 网格线 */}
+                  {Array.from({
+                    length: Math.ceil(MAP_CONFIG.width / MAP_CONFIG.gridSize),
+                  }).map((_, i) => (
                     <Rect
-                      x={room.x}
-                      y={room.y}
-                      width={room.width}
-                      height={room.height}
-                      fill={room.color}
-                      stroke="#d0d0d0"
+                      key={`vline-${i}`}
+                      x={i * MAP_CONFIG.gridSize}
+                      y={0}
+                      width={1}
+                      height={MAP_CONFIG.height}
+                      fill="#e0e0e0"
+                    />
+                  ))}
+                  {Array.from({
+                    length: Math.ceil(MAP_CONFIG.height / MAP_CONFIG.gridSize),
+                  }).map((_, i) => (
+                    <Rect
+                      key={`hline-${i}`}
+                      x={0}
+                      y={i * MAP_CONFIG.gridSize}
+                      width={MAP_CONFIG.width}
+                      height={1}
+                      fill="#e0e0e0"
+                    />
+                  ))}
+
+                  {/* Room backgrounds */}
+                  {MAP_CONFIG.rooms.map((room) => (
+                    <Group key={`room-${room.id}`}>
+                      <Rect
+                        x={room.x}
+                        y={room.y}
+                        width={room.width}
+                        height={room.height}
+                        fill={room.color}
+                        stroke="#d0d0d0"
+                        strokeWidth={1}
+                        cornerRadius={2}
+                        opacity={0.3}
+                      />
+                      <Text
+                        text={room.name}
+                        x={room.x + 10}
+                        y={room.y + 10}
+                        fontSize={12}
+                        fill="#666"
+                        fontStyle="bold"
+                      />
+                    </Group>
+                  ))}
+
+                  {/* Walls */}
+                  {MAP_CONFIG.walls.map((wall, index) => (
+                    <Rect
+                      key={`wall-${index}`}
+                      x={wall.x}
+                      y={wall.y}
+                      width={wall.width}
+                      height={wall.height}
+                      fill={
+                        wall.type === WallType.EXTERIOR ? "#34495e" : "#7f8c8d"
+                      }
+                      stroke={
+                        wall.type === WallType.EXTERIOR ? "#2c3e50" : "#95a5a6"
+                      }
                       strokeWidth={1}
+                      cornerRadius={1}
+                    />
+                  ))}
+
+                  {/* Doors (openings) */}
+                  {MAP_CONFIG.doors.map((door, index) => (
+                    <Rect
+                      key={`door-${index}`}
+                      x={door.x}
+                      y={door.y}
+                      width={door.width}
+                      height={door.height}
+                      fill={door.isOpen ? "transparent" : "#8B4513"}
+                      stroke={door.isOpen ? "#2ECC71" : "#A0522D"}
+                      strokeWidth={door.isOpen ? 2 : 1}
+                      dash={door.isOpen ? [5, 5] : []}
                       cornerRadius={2}
-                      opacity={0.3}
                     />
-                    <Text
-                      text={room.name}
-                      x={room.x + 10}
-                      y={room.y + 10}
-                      fontSize={12}
-                      fill="#666"
-                      fontStyle="bold"
+                  ))}
+
+                  {/* Legacy obstacles (for backward compatibility) */}
+                  {MAP_CONFIG.obstacles.map((obstacle, index) => (
+                    <Rect
+                      key={`obstacle-${index}`}
+                      x={obstacle.x}
+                      y={obstacle.y}
+                      width={obstacle.width}
+                      height={obstacle.height}
+                      fill="#95a5a6"
+                      stroke="#7f8c8d"
+                      strokeWidth={1}
+                      cornerRadius={4}
                     />
-                  </Group>
-                ))}
-
-                {/* Walls */}
-                {MAP_CONFIG.walls.map((wall, index) => (
-                  <Rect
-                    key={`wall-${index}`}
-                    x={wall.x}
-                    y={wall.y}
-                    width={wall.width}
-                    height={wall.height}
-                    fill={
-                      wall.type === WallType.EXTERIOR ? "#34495e" : "#7f8c8d"
-                    }
-                    stroke={
-                      wall.type === WallType.EXTERIOR ? "#2c3e50" : "#95a5a6"
-                    }
-                    strokeWidth={1}
-                    cornerRadius={1}
-                  />
-                ))}
-
-                {/* Doors (openings) */}
-                {MAP_CONFIG.doors.map((door, index) => (
-                  <Rect
-                    key={`door-${index}`}
-                    x={door.x}
-                    y={door.y}
-                    width={door.width}
-                    height={door.height}
-                    fill={door.isOpen ? "transparent" : "#8B4513"}
-                    stroke={door.isOpen ? "#2ECC71" : "#A0522D"}
-                    strokeWidth={door.isOpen ? 2 : 1}
-                    dash={door.isOpen ? [5, 5] : []}
-                    cornerRadius={2}
-                  />
-                ))}
-
-                {/* Legacy obstacles (for backward compatibility) */}
-                {MAP_CONFIG.obstacles.map((obstacle, index) => (
-                  <Rect
-                    key={`obstacle-${index}`}
-                    x={obstacle.x}
-                    y={obstacle.y}
-                    width={obstacle.width}
-                    height={obstacle.height}
-                    fill="#95a5a6"
-                    stroke="#7f8c8d"
-                    strokeWidth={1}
-                    cornerRadius={4}
-                  />
-                ))}
-              </Layer>
-            </Stage>
+                  ))}
+                </Layer>
+              </Stage>
             </div>
-            
+
             {/* Agents层 - 最顶层，单独的Stage */}
             <div className="absolute top-0 left-0 z-10">
               <Stage
@@ -1118,78 +1145,85 @@ export default function TownMap() {
                 x={stagePosition.x}
                 y={stagePosition.y}
               >
-              <Layer>
-                {/* 数字人 */}
-                {agents.map((agent) => (
-                  <Group key={`agent-${agent.id}`}>
-                    {/* 对话状态波纹动效 */}
-                    <ConversationRipple
-                      x={agent.position.x}
-                      y={agent.position.y}
-                      isVisible={agent.status === "talking"}
-                      layer={layerRef.current}
-                    />
+                <Layer>
+                  {/* 数字人 */}
+                  {agents.map((agent) => (
+                    <Group key={`agent-${agent.id}`}>
+                      {/* 对话状态波纹动效 */}
+                      <ConversationRipple
+                        x={agent.position.x}
+                        y={agent.position.y}
+                        isVisible={agent.status === "talking"}
+                        layer={layerRef.current}
+                      />
 
-                    <AgentAvatar
-                      agent={agent}
-                      agentRef={(node) => {
-                        if (node) agentCirclesRef.current[agent.id] = node;
-                      }}
-                      onClick={() => handleAgentClick(agent.id)}
-                      onDragStart={() => {
-                        handleAgentDragStart(agent.id);
-                        const container = stageRef.current?.container();
-                        if (container) {
-                          container.style.cursor = "grabbing";
+                      <AgentAvatar
+                        key={`avatar-${agent.id}-${agent.position.x}-${agent.position.y}`}
+                        agent={agent}
+                        agentRef={(node) => {
+                          if (node) agentCirclesRef.current[agent.id] = node;
+                        }}
+                        onClick={() => handleAgentClick(agent.id)}
+                        onDragStart={() => {
+                          handleAgentDragStart(agent.id);
+                          const container = stageRef.current?.container();
+                          if (container) {
+                            container.style.cursor = "grabbing";
+                          }
+                        }}
+                        onDragMove={(newPos) =>
+                          handleAgentDragMove(agent.id, newPos)
                         }
-                      }}
-                      onDragMove={(newPos) => handleAgentDragMove(agent.id, newPos)}
-                      onDragEnd={(finalPos) => {
-                        const validPos = handleAgentDragEnd(agent.id, finalPos);
-                        const container = stageRef.current?.container();
-                        if (container) {
-                          container.style.cursor = "grab";
+                        onDragEnd={(finalPos) => {
+                          const validPos = handleAgentDragEnd(
+                            agent.id,
+                            finalPos
+                          );
+                          const container = stageRef.current?.container();
+                          if (container) {
+                            container.style.cursor = "grab";
+                          }
+                          return validPos;
+                        }}
+                        onMouseEnter={(e) => {
+                          const container = e.target.getStage()?.container();
+                          if (
+                            container &&
+                            (agent.status === "idle" ||
+                              agent.status === "walking")
+                          ) {
+                            container.style.cursor = "grab";
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          const container = e.target.getStage()?.container();
+                          if (container) {
+                            container.style.cursor = "default";
+                          }
+                        }}
+                        draggable={
+                          agent.status === "idle" || agent.status === "walking"
                         }
-                        return validPos;
-                      }}
-                      onMouseEnter={(e) => {
-                        const container = e.target.getStage()?.container();
-                        if (
-                          container &&
-                          (agent.status === "idle" || agent.status === "walking")
-                        ) {
-                          container.style.cursor = "grab";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        const container = e.target.getStage()?.container();
-                        if (container) {
-                          container.style.cursor = "default";
-                        }
-                      }}
-                      draggable={
-                        agent.status === "idle" || agent.status === "walking"
-                      }
-                      draggingAgentId={draggingAgentId}
-                    />
-                    
-                    <Text
-                      ref={(node) => {
-                        if (node) agentTextsRef.current[agent.id] = node;
-                      }}
-                      text={`${agent.name} ${
-                        agent.status === "talking" ? "💬" : ""
-                      }`}
-                      x={agent.position.x - 35}
-                      y={agent.position.y - 45}
-                      fontSize={12}
-                      fill="#333"
-                      align="center"
-                      width={70}
-                    />
-                  </Group>
-                ))}
-              </Layer>
+                        draggingAgentId={draggingAgentId}
+                      />
+
+                      <Text
+                        ref={(node) => {
+                          if (node) agentTextsRef.current[agent.id] = node;
+                        }}
+                        text={`${agent.name} ${
+                          agent.status === "talking" ? "💬" : ""
+                        }`}
+                        x={agent.position.x - 35}
+                        y={agent.position.y - 45}
+                        fontSize={12}
+                        fill="#333"
+                        align="center"
+                        width={70}
+                      />
+                    </Group>
+                  ))}
+                </Layer>
               </Stage>
             </div>
           </div>
@@ -1197,77 +1231,77 @@ export default function TownMap() {
 
         {/* 侧边栏 - 当AgentDetailSidebar显示时隐藏 */}
         {!selectedAgentId && (
-        <div className="w-[29vw] z-10 absolute right-0 top-0 bg-white shadow-lg rounded-lg p-4 flex flex-col h-[100vh]">
-          {/* Agents 状态列表 */}
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold mb-3 text-gray-800">
-              Agents 状态
-            </h3>
-            <div className="space-y-2 overflow-auto max-h-[200px]">
-              {agents.map((agent) => (
-                <div
-                  key={agent.id}
-                  className={`p-2 rounded-lg border text-sm ${
-                    agent.status === "talking"
-                      ? "bg-green-50 border-green-200"
-                      : agent.status === "walking"
-                      ? "bg-blue-50 border-blue-200"
-                      : agent.status === "seeking"
-                      ? "bg-yellow-50 border-yellow-200"
-                      : "bg-gray-50 border-gray-200"
-                  }`}
-                >
-                  <div className="flex justify-between items-center">
-                    <div className="flex items-center space-x-2">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: agent.color }}
-                      />
-                      <span className="font-medium text-gray-700">
-                        {agent.name}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${
-                          agent.status === "talking"
-                            ? "bg-green-100 text-green-700"
-                            : agent.status === "walking"
-                            ? "bg-blue-100 text-blue-700"
-                            : agent.status === "seeking"
-                            ? "bg-yellow-100 text-yellow-700"
-                            : "bg-gray-100 text-gray-700"
-                        }`}
-                      >
-                        {agent.status === "talking"
-                          ? "💬 交谈中"
-                          : agent.status === "walking"
-                          ? "🚶 行走中"
-                          : agent.status === "seeking"
-                          ? "🔍 寻找中"
-                          : "😴 空闲"}
-                      </span>
-                      {agent.talkingWith && (
-                        <span className="text-xs text-gray-500">
-                          与{" "}
-                          {agents.find((a) => a.id === agent.talkingWith)
-                            ?.name || "Unknown"}
+          <div className="w-[29vw] z-10 absolute right-0 top-0 bg-white shadow-lg rounded-lg p-4 flex flex-col h-[100vh]">
+            {/* Agents 状态列表 */}
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold mb-3 text-gray-800">
+                Agents 状态
+              </h3>
+              <div className="space-y-2 overflow-auto max-h-[200px]">
+                {agents.map((agent) => (
+                  <div
+                    key={agent.id}
+                    className={`p-2 rounded-lg border text-sm ${
+                      agent.status === "talking"
+                        ? "bg-green-50 border-green-200"
+                        : agent.status === "walking"
+                        ? "bg-blue-50 border-blue-200"
+                        : agent.status === "seeking"
+                        ? "bg-yellow-50 border-yellow-200"
+                        : "bg-gray-50 border-gray-200"
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center space-x-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: agent.color }}
+                        />
+                        <span className="font-medium text-gray-700">
+                          {agent.name}
                         </span>
-                      )}
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-medium ${
+                            agent.status === "talking"
+                              ? "bg-green-100 text-green-700"
+                              : agent.status === "walking"
+                              ? "bg-blue-100 text-blue-700"
+                              : agent.status === "seeking"
+                              ? "bg-yellow-100 text-yellow-700"
+                              : "bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {agent.status === "talking"
+                            ? "💬 交谈中"
+                            : agent.status === "walking"
+                            ? "🚶 行走中"
+                            : agent.status === "seeking"
+                            ? "🔍 寻找中"
+                            : "😴 空闲"}
+                        </span>
+                        {agent.talkingWith && (
+                          <span className="text-xs text-gray-500">
+                            与{" "}
+                            {agents.find((a) => a.id === agent.talkingWith)
+                              ?.name || "Unknown"}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
 
-          {/* 实时日志 */}
-          <div className="flex-1 flex flex-col min-h-0">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-lg font-semibold text-gray-800">
-                实时日志
-              </h3>
-              {/* <div className="flex gap-2">
+            {/* 实时日志 */}
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-lg font-semibold text-gray-800">
+                  实时日志
+                </h3>
+                {/* <div className="flex gap-2">
                 <button
                   className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
                 >
@@ -1284,58 +1318,61 @@ export default function TownMap() {
                   决策
                 </button>
               </div> */}
-            </div>
-            <div 
-              ref={realtimeLogsRef}
-              className="flex-1 overflow-auto space-y-2 pr-2" 
-            >
-              {realtimeLogs.length === 0 ? (
-                <div className="text-sm text-gray-500 text-center py-8">
-                  暂无实时活动记录...
-                </div>
-              ) : (
-                realtimeLogs.map((log) => (
-                  <div
-                    key={log.id}
-                    className={`p-3 rounded-lg border-l-4 text-sm ${
-                      log.type === "conversation"
-                        ? "bg-blue-50 border-blue-400"
-                        : log.type === "inner_thought"
-                        ? "bg-purple-50 border-purple-400"
-                        : log.type === "decision"
-                        ? "bg-orange-50 border-orange-400"
-                        : "bg-gray-50 border-gray-400"
-                    }`}
-                  >
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="font-medium text-gray-700">
-                        {log.agentName}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {new Date(log.timestamp).toLocaleTimeString()}
-                      </span>
-                    </div>
-                    <div className="text-gray-600">{log.content}</div>
-                    {log.emotion && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        情绪: {log.emotion}
-                      </div>
-                    )}
+              </div>
+              <div
+                ref={realtimeLogsRef}
+                className="flex-1 overflow-auto space-y-2 pr-2"
+              >
+                {realtimeLogs.length === 0 ? (
+                  <div className="text-sm text-gray-500 text-center py-8">
+                    暂无实时活动记录...
                   </div>
-                ))
-              )}
+                ) : (
+                  realtimeLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className={`p-3 rounded-lg border-l-4 text-sm ${
+                        log.type === "conversation"
+                          ? "bg-blue-50 border-blue-400"
+                          : log.type === "inner_thought"
+                          ? "bg-purple-50 border-purple-400"
+                          : log.type === "decision"
+                          ? "bg-orange-50 border-orange-400"
+                          : "bg-gray-50 border-gray-400"
+                      }`}
+                    >
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="font-medium text-gray-700">
+                          {log.agentName}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(log.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <div className="text-gray-600">{log.content}</div>
+                      {log.emotion && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          情绪: {log.emotion}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
-        </div>
         )}
       </div>
 
       {/* Agent详情右侧栏 */}
       {selectedAgentId && (
-        <AgentDetailSidebar
-          agentId={selectedAgentId}
-          onClose={handleCloseAgentInfo}
-        />
+        <div className="w-[29vw] z-10 absolute right-0 top-0 bg-white shadow-lg rounded-lg p-4 flex flex-col h-[100vh]">
+          <AgentDetailSidebar
+            agents={agents}
+            agentId={selectedAgentId}
+            onClose={handleCloseAgentInfo}
+          />
+        </div>
       )}
     </div>
   );

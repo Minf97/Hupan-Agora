@@ -13,6 +13,7 @@ import { useSocketManager } from "@/hooks/useSocketManager";
 interface AgentDetailSidebarProps {
   agentId: number;
   onClose: () => void;
+  agents: any;
 }
 
 interface ThoughtRecord {
@@ -32,16 +33,19 @@ interface ThoughtRecord {
 }
 
 export default function AgentDetailSidebar({
+  agents,
   agentId,
   onClose,
 }: AgentDetailSidebarProps) {
-  const { agents } = useSocketManager();
   const [agentData, setAgentData] = useState<any>(null);
   const [agentThoughts, setAgentThoughts] = useState<ThoughtRecord[]>([]);
   const [loadingThoughts, setLoadingThoughts] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'history' | 'chat'>('details');
 
   const agent = agents.find((a) => a.id === agentId);
+
+  console.log(agentId, "agentId", agent,agents);
+  
 
   const { getAgent } = useAgentCacheStore();
 
