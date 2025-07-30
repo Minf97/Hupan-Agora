@@ -42,7 +42,7 @@ export default function AgentDetailSidebar({
   const [loadingThoughts, setLoadingThoughts] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'history' | 'chat'>('details');
 
-  const agent = agents.find((a) => a.id === agentId);
+  const agent = agents.find((a: any) => a.id === agentId);
 
   console.log(agentId, "agentId", agent,agents);
   
@@ -142,7 +142,7 @@ export default function AgentDetailSidebar({
                   <p className="text-blue-700">
                     正在交谈:{" "}
                     <span className="font-medium">
-                      {agents.find((a) => a.id === agent.talkingWith)?.name}
+                      {agents.find((a: any) => a.id === agent.talkingWith)?.name}
                     </span>
                   </p>
                 )}

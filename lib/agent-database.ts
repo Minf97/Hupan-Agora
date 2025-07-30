@@ -58,6 +58,7 @@ export async function fetchAgentPersonalityFromDB(agentId: number): Promise<Agen
 
   } catch (error) {
     console.error(`❌ 从数据库获取Agent ${agentId} 个性失败:`, error);
+    return null as any;
   }
 }
 
